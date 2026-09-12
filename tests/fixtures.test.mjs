@@ -120,8 +120,12 @@ test('fixture reports retain strict timing failures alongside onset diagnostics'
     };
   };
   const report=await fixtures.runFixtures(createOffline);
-  assert.equal(report.fixtureVersion,3);
+  assert.equal(report.fixtureVersion,4);
   assert.equal(report.scheduling,'raw-seconds');
+  for(const kind of ['delay','convolver']) for(const result of report.results.filter(result=>result.kind===kind)) {
+    assert.equal(result.status,'unavailable');
+    assert.equal(result.reason,kind==='delay'?'DelayNode absent':'ConvolverNode absent');
+  }
   const timing=report.results.filter(result=>result.kind==='timing');
   assert.equal(timing.length,2);
   for(const result of timing) {
@@ -162,7 +166,7 @@ test('raw seconds shift frame 1023 on a truncating host at 44.1 kHz; adapter fra
 test('fixture reports label the scheduling conversion and reject malformed options',async()=>{
   const native=nativeAdapter(()=>{throw new Error('offline fixture only');});
   const report=await fixtures.runFixtures(truncatingOffline,{hostTime:native.hostTime,scheduling:'native-adapter-frames'});
-  assert.equal(report.fixtureVersion,3);
+  assert.equal(report.fixtureVersion,4);
   assert.equal(report.scheduling,'native-adapter-frames');
   for(const result of report.results.filter(result=>result.kind==='timing')) {
     assert.equal(result.status,'pass');
@@ -174,4 +178,73 @@ test('fixture reports label the scheduling conversion and reject malformed optio
   await assert.rejects(fixtures.runFixtures(truncatingOffline,{hostTime:'frames'}),TypeError);
   await assert.rejects(fixtures.runFixtures(truncatingOffline,{scheduling:''}),TypeError);
   await assert.rejects(fixtures.renderFixture(truncatingOffline,'timing',48000,-0.75,null),TypeError);
+});
+
+// Ideal sparse-signal host: gains scale, delays shift by whole frames, convolvers add the shifted response for
+// every nonzero input sample, and a mono signal reaching the stereo destination feeds both channels.
+function idealMixingOffline({sampleRate,length}) {
+  const node=(kind,extra={})=>({kind,targets:[],connect(t){this.targets.push(t);},disconnect(){},...extra});
+  const param=()=>({value:0,setValueAtTime(v){this.value=v;},linearRampToValueAtTime(){}});
+  const sources=[];
+  const context={
+    destination:node('destination'),
+    createBuffer(channels,frames){const data=Array.from({length:channels},()=>new Float32Array(frames));return {numberOfChannels:channels,length:frames,getChannelData:i=>data[i],copyToChannel(src,i){data[i].set(src);}};},
+    createBufferSource(){const s=node('source',{buffer:null,start(){}});sources.push(s);return s;},
+    createGain:()=>node('gain',{gain:param()}),
+    createDelay:()=>node('delay',{delayTime:param()}),
+    createConvolver:()=>node('convolver',{buffer:null,normalize:true}),
+    createBiquadFilter:()=>node('filter',{frequency:param(),Q:param()}),
+    createStereoPanner:()=>node('pan',{pan:param()}),
+    async startRendering(){
+      const out=[new Float32Array(length),new Float32Array(length)];
+      const propagate=(target,signal)=>{
+        if(target.kind==='destination') { signal.forEach((data,c)=>{for(let i=0;i<length;i++) out[c][i]+=data[i];}); if(signal.length===1) for(let i=0;i<length;i++) out[1][i]+=signal[0][i]; return; }
+        let next=signal;
+        if(target.kind==='gain') next=signal.map(data=>data.map(x=>x*target.gain.value));
+        if(target.kind==='delay') { const D=Math.round(target.delayTime.value*sampleRate); next=signal.map(data=>{const shifted=new Float32Array(length); for(let i=0;i+D<length;i++) shifted[i+D]=data[i]; return shifted;}); }
+        if(target.kind==='convolver') {
+          const ir=target.buffer; next=Array.from({length:ir.numberOfChannels},()=>new Float32Array(length));
+          for(let c=0;c<ir.numberOfChannels;c++) { const response=ir.getChannelData(c); const input=signal[Math.min(c,signal.length-1)];
+            for(let i=0;i<length;i++) if(input[i]!==0) for(let j=0;j<response.length && i+j<length;j++) next[c][i+j]+=input[i]*response[j]; }
+        }
+        for(const t of target.targets) propagate(t,next);
+      };
+      for(const s of sources) { const data=new Float32Array(length); data.set(s.buffer.getChannelData(0).subarray(0,length)); for(const t of s.targets) propagate(t,[data]); }
+      return {getChannelData:i=>out[i]};
+    }
+  };
+  return context;
+}
+
+test('mixing fixture references are deterministic and internally consistent',()=>{
+  const expected48=fixtures.delayFixtureExpected(48000), expected44=fixtures.delayFixtureExpected(44100);
+  assert.deepEqual([...expected48.entries()].filter(([,v])=>v!==0),[[0,1],[480,0.5],[960,0.25],[1440,0.125]]);
+  assert.deepEqual([...expected44.entries()].filter(([,v])=>v!==0),[[0,1],[441,0.5],[882,0.25],[1323,0.125]]);
+  assert.throws(()=>fixtures.delayFixtureExpected(22050),RangeError);
+  const a=fixtures.syntheticImpulseResponse(12000,1234), b=fixtures.syntheticImpulseResponse(12000,1234), other=fixtures.syntheticImpulseResponse(12000,5678);
+  assert.deepEqual([...a],[...b]);
+  assert.ok(a.some((x,i)=>x!==other[i]));
+  assert.ok(a.every(x=>Number.isFinite(x) && Math.abs(x)<=1));
+  assert.ok(a.subarray(11000).every(x=>Math.abs(x)<=2e-3));
+  assert.ok(Math.max(...a.subarray(0,100).map(Math.abs))>0.5);
+  const convolver=fixtures.convolverFixtureExpected(48000);
+  assert.equal(convolver.length,2); assert.equal(convolver[0].length,48000);
+  assert.deepEqual([...convolver[1].subarray(0,12000)],[...other]);
+  assert.ok(convolver[0].subarray(12000).every(x=>x===0));
+  assert.throws(()=>fixtures.syntheticImpulseResponse(0,1),RangeError);
+});
+
+test('an ideal host passes the delay-chain and convolver-identity fixtures at both rates',async()=>{
+  const report=await fixtures.runFixtures(idealMixingOffline);
+  for(const kind of ['delay','convolver']) {
+    const results=report.results.filter(result=>result.kind===kind);
+    assert.equal(results.length,2);
+    for(const result of results) {
+      assert.equal(result.status,'pass',JSON.stringify(result));
+      assert.ok(result.arithmeticError<=1e-5);
+      assert.equal(result.repeatError,0);
+    }
+  }
+  const delay48=report.results.find(result=>result.kind==='delay'&&result.rate===48000);
+  assert.deepEqual(delay48.observedOnsets.map(onset=>onset.frame),[0,480,960,1440]);
 });

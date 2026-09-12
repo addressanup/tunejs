@@ -24,6 +24,9 @@ export interface HostOscillator extends HostScheduledSource {
 export interface HostBufferSource extends HostScheduledSource {
   buffer: HostBuffer | null; loop: boolean; loopStart: number; loopEnd: number; playbackRate: HostParam;
 }
+export interface HostPanner extends HostNode { pan: HostParam }
+export interface HostDelay extends HostNode { delayTime: HostParam }
+export interface HostConvolver extends HostNode { buffer: HostBuffer | null; normalize: boolean }
 export interface HostContext {
   readonly currentTime: number;
   readonly sampleRate: number;
@@ -34,6 +37,9 @@ export interface HostContext {
   createOscillator(): HostOscillator;
   createBuffer(channels: number, frames: number, sampleRate: number): HostBuffer;
   createBufferSource(): HostBufferSource;
+  createStereoPanner(): HostPanner;
+  createDelay(maxDelaySeconds: number): HostDelay;
+  createConvolver(): HostConvolver;
   resume(): Promise<void>;
   suspend(): Promise<void>;
   close(): Promise<void>;

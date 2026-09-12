@@ -27,7 +27,7 @@ export function noteToFrequency(note: string): number {
 }
 
 export class Instrument extends GraphNode {
-  /** @internal */ input?: HostNode;
+  /** @internal */ voiceInput?: HostNode;
   readonly preset: InstrumentPreset;
   readonly level: Param;
   readonly filterHz: Param;
@@ -97,7 +97,7 @@ export class Instrument extends GraphNode {
       levelGain = context.createGain();
       this.level.bind(levelGain.gain);
       filter.connect(levelGain);
-      this.input = filter; this.host = levelGain;
+      this.voiceInput = filter; this.host = levelGain;
     } catch (cause) {
       const errors: unknown[] = [cause];
       this.filterHz.bind(); this.level.bind();
@@ -149,7 +149,7 @@ export class Instrument extends GraphNode {
     try { super.dispose(); } catch (error) { errors.push(error); }
     this.level.bind();
     this.filterHz.bind();
-    try { this.input?.disconnect(); this.input = undefined; } catch (error) { errors.push(error); }
+    try { this.voiceInput?.disconnect(); this.voiceInput = undefined; } catch (error) { errors.push(error); }
     if (errors.length) throw new TuneError('HOST_FAILURE', 'Host instrument cleanup failed.', 'Dispose the engine to release remaining host resources.', { cause: new AggregateError(errors) });
   }
 }
@@ -186,7 +186,7 @@ class SynthVoice implements OwnedVoice {
         osc.connect(layerGain); layerGain.connect(env);
         this.#oscs.push(osc); this.#layerGains.push(layerGain);
       }
-      env.connect(instrument.input!);
+      env.connect(instrument.voiceInput!);
       const gain = env.gain;
       const { attack, decay, sustain, release } = envelope;
       const peak = this.#peak;

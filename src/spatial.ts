@@ -139,6 +139,7 @@ export class SpatialSource extends GraphNode {
   get direction(): Vec3 | null { return this.#direction ? frozen3(this.#direction) : null; }
   get distanceModel(): DistanceModel { return Object.freeze({ ...this.#distanceModel }); }
   get cone(): Cone { return Object.freeze({ ...this.#cone }); }
+  get smoothingSeconds(): number { return this.#smoothing; }
   /** @internal */ override get input() { return this.distanceGain; }
   setPosition(position: Vec3, options: { seconds?: number } = {}): void {
     this.assertAlive();

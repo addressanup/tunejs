@@ -75,6 +75,8 @@ async function example() {
   take.toWav();
   for await (const chunk of await e.tap({ source: mic })) { chunk.startFrame; break; }
   (await e.meter({ source: mic })).read();
+  const { project } = e.exportProject();
+  await e.importProject(project, { resolveAsset: async () => new ArrayBuffer(0) });
   await e.dispose();
 }
 void idle;

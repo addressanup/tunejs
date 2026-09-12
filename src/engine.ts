@@ -16,6 +16,7 @@ import { Listener, SpatialSource } from './spatial.js';
 import type { SpatialSourceOptions } from './spatial.js';
 import { Input, Meter, Recorder, Tap } from './capture.js';
 import type { MeterTimers } from './capture.js';
+import { exportProject, importProject } from './project.js';
 import type { HostBuffer, HostGain } from './backend.js';
 export type EngineState = 'idle' | 'starting' | 'running' | 'suspended' | 'interrupted' | 'failed' | 'disposed';
 
@@ -37,11 +38,11 @@ export class Engine {
   #suspending?: Promise<void>;
   #disposing?: Promise<void>;
   constructor(options: { adapter: Adapter }) {
-    this.adapter = options.adapter; this.output = new GraphNode(this, 'output'); this.nodes.add(this.output);
+    this.adapter = options.adapter; this.output = new GraphNode(this, 'output'); this.output.nodeId = 'output'; this.nodes.add(this.output);
     this.transport = new Transport(this);
     this.listener = new Listener(this);
     const fanOut = this.adapter.hostLimits.fanOut;
-    this.capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, kits: true, transport: true, patterns: true, fanOut, delay: fanOut, reverb: fanOut, spatial: true, binaural: false, stereoSpatial: true, taps: !!this.adapter.tapping, capture: !!this.adapter.capture, recorder: !!this.adapter.tapping, meters: !!this.adapter.tapping, projects: false, offline: false, backgroundPlayback: false });
+    this.capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, kits: true, transport: true, patterns: true, fanOut, delay: fanOut, reverb: fanOut, spatial: true, binaural: false, stereoSpatial: true, taps: !!this.adapter.tapping, capture: !!this.adapter.capture, recorder: !!this.adapter.tapping, meters: !!this.adapter.tapping, projects: true, offline: false, backgroundPlayback: false });
   }
   get state(): EngineState {
     if (this.#state === 'running' && this.#context?.state !== 'running') return this.#context?.state === 'suspended' ? 'suspended' : 'interrupted';
@@ -122,6 +123,8 @@ export class Engine {
   }
   gain(options: { gain?: number } = {}): Gain { this.assertAlive(); return this.add(new Gain(this, options.gain ?? 0.1)); }
   pattern(data: PatternData): Pattern { this.assertAlive(); return new Pattern(data); }
+  exportProject() { return exportProject(this); }
+  async importProject(project: unknown, options: { resolveAsset?: (id: string) => Promise<ArrayBuffer | ArrayBufferView> } = {}) { return importProject(this, project, options); }
   async tap(options: { source: GraphNode; chunkFrames?: number; maxBufferedFrames?: number }): Promise<Tap> {
     const context = this.runningContext();
     const source = options?.source;
@@ -292,7 +295,10 @@ export class Engine {
     }
     return released;
   }
+  #nodeCounter = 0;
+  /** @internal */ continueNodeCounter(value: number): void { if (value > this.#nodeCounter) this.#nodeCounter = value; }
   private add<T extends GraphNode>(node: T): T {
+    node.nodeId = `n${++this.#nodeCounter}`;
     try { this.materialize(node); }
     catch (cause) { throw new TuneError('HOST_FAILURE', 'The host could not prepare the graph object.', 'Dispose the engine if host cleanup failed, then retry with a new engine.', { cause }); }
     this.nodes.add(node); return node;

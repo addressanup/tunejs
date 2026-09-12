@@ -53,6 +53,7 @@ export class Param {
 
 export class GraphNode {
   /** @internal */ host?: HostNode;
+  /** @internal */ nodeId = '';
   /** @internal */ readonly targets = new Set<GraphNode>();
   #disposed = false;
   /** @internal */ constructor(readonly engine: Engine, readonly kind: 'source' | 'gain' | 'filter' | 'bus' | 'pan' | 'delay' | 'reverb' | 'spatial' | 'output') {}

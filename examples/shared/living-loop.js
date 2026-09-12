@@ -1,5 +1,5 @@
 // Shared by browser, Electron and React Native. Host UI owns teardown/subscriptions.
-import { Engine } from 'tunejs';
+import { Engine, Instrument, Kit } from 'tunejs';
 import { softKeys, softDrums } from 'tunejs/presets';
 
 // Two alternating four-beat phrases over a steady percussion loop — the transport keeps the grid,
@@ -53,6 +53,26 @@ export function livingLoop(adapter) {
     stop() { transport.stop(); },
     replacePhrase() { const ack = phrase.replace(onA ? phraseB : phraseA, { boundary: 'next-bar' }); onA = !onA; return ack; },
     setTempo(bpm) { return transport.bpm.set(bpm); },
+    exportProject() { return engine.exportProject(); },
+    dispose() { return engine.dispose(); },
+  };
+}
+
+// Rebuild a living-loop-shaped session from an imported project. Targets are found by type; the
+// phrase library (phraseA/phraseB) is not part of the project format, so replacePhrase is absent.
+export async function importLoop(adapter, project, { resolveAsset } = {}) {
+  const engine = new Engine({ adapter });
+  await engine.start();
+  const { nodes } = await engine.importProject(project, { resolveAsset });
+  const keys = [...nodes.values()].find(node => node instanceof Instrument);
+  const drums = [...nodes.values()].find(node => node instanceof Kit);
+  const transport = engine.transport;
+  return {
+    engine, keys, drums, transport,
+    async start() { transport.start(); },
+    stop() { transport.stop(); },
+    setTempo(bpm) { return transport.bpm.set(bpm); },
+    exportProject() { return engine.exportProject(); },
     dispose() { return engine.dispose(); },
   };
 }

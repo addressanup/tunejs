@@ -101,6 +101,20 @@ export function encodeWav(channels: Float32Array[], sampleRate: number): { bytes
   return { bytes, clippedSamples };
 }
 
+/** FNV-1a 64 over the little-endian Float32 bytes of all channels concatenated, as 'fnv1a64:' + 16 hex digits. */
+export function fnv1a64Float32(channels: Float32Array[]): string {
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  const mask = 0xffffffffffffffffn;
+  for (const channel of channels) {
+    const view = new DataView(channel.buffer, channel.byteOffset, channel.byteLength);
+    for (let i = 0; i < view.byteLength; i++) {
+      hash = ((hash ^ BigInt(view.getUint8(i))) * prime) & mask;
+    }
+  }
+  return `fnv1a64:${hash.toString(16).padStart(16, '0')}`;
+}
+
 const besselI0 = (x: number): number => {
   let sum = 1, term = 1;
   const x2 = (x / 2) * (x / 2);

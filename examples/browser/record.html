@@ -4,7 +4,7 @@
 <script type="importmap">{"imports":{"tunejs":"/dist/index.js","tunejs/browser":"/dist/adapters/browser.js","tunejs/presets":"/dist/presets.js"}}</script>
 <h1>TuneJS</h1><p>Record the microphone, reuse the take.</p>
 <small>Development snapshot · bounded PCM tap → WAV → sample</small>
-<p><button id="arm">Enable microphone</button><button id="record" disabled>Record 10 s</button><button id="stop" disabled>Stop</button><button id="play" disabled>Play</button><button id="download" disabled>Download WAV</button></p>
+<p><button id="arm">Enable microphone</button><button id="record" disabled>Record 10 s</button><button id="stop" disabled>Stop</button><button id="play" disabled>Play</button><button id="download" disabled>Download WAV</button><button id="bundle" disabled>Save bundle</button></p>
 <div id="level"></div><canvas id="wave" width="640" height="96"></canvas>
 <label>Seek <input id="seek" type="range" min="0" max="10" step="0.1" value="0" disabled> <output id="secs">0 s</output></label>
 <p id="status" role="status">Idle. Enable the microphone to arm the input.</p><pre id="diagnostics"></pre>
@@ -56,7 +56,7 @@ $('#record').onclick = async () => {
 $('#stop').onclick = async () => {
   try {
     recording = await session.stopRecording();
-    $('#stop').disabled = true; $('#play').disabled = false; $('#download').disabled = false; $('#seek').disabled = false;
+    $('#stop').disabled = true; $('#play').disabled = false; $('#download').disabled = false; $('#seek').disabled = false; $('#bundle').disabled = false;
     $('#seek').max = recording.frames / recording.sampleRate;
     status.textContent = `Recorded ${recording.frames} frames (${recording.reason}, ${recording.toWav().clippedSamples} clipped samples).`;
     report();
@@ -70,6 +70,25 @@ $('#download').onclick = () => {
   const link = document.createElement('a');
   link.href = url; link.download = 'take-1.wav'; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
+};
+$('#bundle').onclick = () => {
+  try {
+    const engine = session.engine;
+    // A non-empty arrangement: play the take once at beat 0.
+    const once = engine.pattern({ length: { beats: 4 }, events: [{ beat: 0, notes: 'sample', duration: { beats: 4 } }] });
+    engine.transport.schedule(once, session.sampleNode, { at: { beats: 0 }, loop: false });
+    const { project, warnings } = engine.exportProject();
+    const download = (name, blob) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = name; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    };
+    download('project.json', new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' }));
+    download('take-1.wav', new Blob([recording.toWav().bytes], { type: 'audio/wav' }));
+    status.textContent = warnings.length ? `Saved bundle with warnings: ${warnings.join(' ')}` : 'Saved project.json and take-1.wav.';
+    report();
+  } catch (error) { failure(error); }
 };
 const hidden = () => { if (document.hidden && session.engine.state !== 'disposed') session.engine.suspend().catch(failure); };
 document.addEventListener('visibilitychange', hidden);

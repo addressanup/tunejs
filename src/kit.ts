@@ -14,6 +14,7 @@ interface FrozenHit { frequencyHz: number; layers: readonly ReturnType<typeof va
 
 export class Kit extends GraphNode {
   readonly level: Param;
+  readonly preset: KitPreset;
   readonly maxVoices: number;
   readonly hits: readonly string[];
   #hits: Readonly<Record<string, FrozenHit>>;
@@ -40,6 +41,7 @@ export class Kit extends GraphNode {
     this.#hits = Object.freeze(frozen);
     this.hits = Object.freeze(entries.map(([name]) => name));
     this.level = new Param(this, level, 'kit level', 0, 4);
+    this.preset = preset;
   }
   get activeVoices(): number { return this.#live.size; }
   /** @internal */ register(voice: SynthVoice): void { this.#live.add(voice); }

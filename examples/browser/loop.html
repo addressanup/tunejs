@@ -5,13 +5,14 @@
 <h1>TuneJS</h1><p>A loop that keeps running while you change it.</p>
 <small>Living-loop development snapshot · softKeys + softDrums under a transport at 108 bpm</small>
 <p><button id="start">Start</button><button id="stop">Stop</button><button id="replace">Replace phrase</button><button id="t124">Tempo 124</button><button id="t96">Tempo 96</button></p>
+<p><button id="export">Export project</button><button id="import">Import project</button><input id="file" type="file" accept="application/json" hidden></p>
 <p id="status" role="status">Idle. Press Start to activate output.</p><pre id="diagnostics"></pre>
 <p><small>Phrase and tempo changes apply at the next bar. A running state does not confirm audible output. Check volume and route if silent.</small></p>
 <p><a href="/examples/browser/index.html">First-sound example</a></p>
 <script type="module">
 import { browserAdapter } from 'tunejs/browser';
-import { livingLoop } from '/examples/shared/living-loop.js';
-const loop = livingLoop(browserAdapter());
+import { livingLoop, importLoop } from '/examples/shared/living-loop.js';
+let loop = livingLoop(browserAdapter());
 const status = document.querySelector('#status');
 function report() { document.querySelector('#diagnostics').textContent = JSON.stringify(loop.transport.diagnostics, null, 2); }
 function failure(error) { status.textContent = `${error.code ?? error.name}: ${error.message} ${error.recovery ?? ''}`; report(); }
@@ -20,6 +21,29 @@ document.querySelector('#stop').onclick = () => { try { loop.stop(); status.text
 document.querySelector('#replace').onclick = () => { try { const ack = loop.replacePhrase(); status.textContent = `Phrase applies at beat ${ack.effectiveBeat}`; report(); } catch(error) { failure(error); } };
 document.querySelector('#t124').onclick = () => { try { const ack = loop.setTempo(124); status.textContent = `Tempo ${ack.appliedAt === 'now' ? 'now' : `from beat ${ack.effectiveBeat}`}`; report(); } catch(error) { failure(error); } };
 document.querySelector('#t96').onclick = () => { try { const ack = loop.setTempo(96); status.textContent = `Tempo ${ack.appliedAt === 'now' ? 'now' : `from beat ${ack.effectiveBeat}`}`; report(); } catch(error) { failure(error); } };
+document.querySelector('#export').onclick = () => {
+  try {
+    const { project, warnings } = loop.exportProject();
+    const url = URL.createObjectURL(new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = 'project.json'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    status.textContent = warnings.length ? `Exported with warnings: ${warnings.join(' ')}` : 'Exported project.json.';
+    report();
+  } catch(error) { failure(error); }
+};
+const file = document.querySelector('#file');
+document.querySelector('#import').onclick = () => file.click();
+file.onchange = async () => {
+  try {
+    const project = JSON.parse(await file.files[0].text());
+    const previous = loop;
+    loop = await importLoop(browserAdapter(), project, { resolveAsset: async id => { throw new Error(`Asset '${id}' is not bundled in this example.`); } });
+    previous.dispose().catch(failure);
+    status.textContent = 'Imported — press Start to run it.';
+    report();
+  } catch(error) { failure(error); }
+};
 const timer = setInterval(report, 200);
 const hidden = () => { if (document.hidden && loop.engine.state !== 'disposed') loop.engine.suspend().catch(failure); };
 document.addEventListener('visibilitychange', hidden);

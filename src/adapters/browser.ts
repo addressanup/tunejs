@@ -1,5 +1,5 @@
 import type { Adapter } from '../backend.js';
-import { TuneError } from '../errors.js';
+import { TuneError, integerFrame } from '../errors.js';
 /** Does not construct an AudioContext until Engine.start() is called. */
 export function browserAdapter(): Adapter {
   return {
@@ -11,5 +11,6 @@ export function browserAdapter(): Adapter {
       return new AudioContext({ latencyHint: 'interactive' });
     },
     setEnded(node, callback) { Reflect.set(node, 'onended', callback); },
+    hostTime(frame, sampleRate) { return integerFrame(frame, 'frame') / sampleRate; },
   };
 }

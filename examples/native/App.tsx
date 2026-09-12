@@ -6,7 +6,8 @@ import { firstSound } from './generated/first-sound';
 import { runFixtures } from './generated/fixtures';
 
 export default function App() {
-  const [sound] = useState(() => firstSound(nativeAdapter(() => new AudioContext())));
+  const adapter = nativeAdapter(() => new AudioContext());
+  const [sound] = useState(() => firstSound(adapter));
   const [status, setStatus] = useState('Idle — tap Play to activate audio');
   const [results, setResults] = useState('Offline fixtures running');
   const act = async (action: () => unknown) => { try { await action(); setStatus(JSON.stringify(sound.engine.diagnostics)); } catch(error) { setStatus(String(error)); } };
@@ -17,7 +18,10 @@ export default function App() {
     });
     void (async () => {
       try {
-        const data = {date:new Date().toISOString(),platform:Platform.OS,version:Platform.Version,rn:Platform.constants.reactNativeVersion,scope:'release simulator offline PCM; no physical-device validation',...await runFixtures((o: {numberOfChannels:number;length:number;sampleRate:number}) => new OfflineAudioContext(o))};
+        const createOffline = (o: {numberOfChannels:number;length:number;sampleRate:number}) => new OfflineAudioContext(o);
+        const raw = await runFixtures(createOffline);
+        const scheduled = await runFixtures(createOffline, {hostTime: adapter.hostTime, scheduling: 'native-adapter-frames'});
+        const data = {date:new Date().toISOString(),platform:Platform.OS,version:Platform.Version,rn:Platform.constants.reactNativeVersion,scope:'release simulator offline PCM; no physical-device validation',...raw,adapterScheduled:scheduled};
         if(alive) setResults(JSON.stringify(data,null,2));
         const endpoint = Platform.OS === 'android' ? 'http://10.0.2.2:4173' : 'http://127.0.0.1:4173';
         await fetch(`${endpoint}/results/native`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data,null,2)});

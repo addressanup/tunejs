@@ -1,5 +1,5 @@
 import type { Adapter, HostContext, HostNode, HostParam, HostOscillator } from './backend.js';
-import { TuneError, finite } from './errors.js';
+import { TuneError, finite, integerFrame } from './errors.js';
 export type EngineState = 'idle' | 'starting' | 'running' | 'suspended' | 'interrupted' | 'failed' | 'disposed';
 export type Seconds = { seconds: number };
 
@@ -123,8 +123,9 @@ export class Oscillator extends GraphNode {
       const currentVoice = new Voice(this.engine, oscillator, () => this.#voices.delete(currentVoice));
       voice = currentVoice;
       this.#voices.add(currentVoice);
-      oscillator.start(context.currentTime);
-      if (duration !== undefined) oscillator.stop(context.currentTime + duration);
+      const startFrame = this.engine.currentFrame;
+      oscillator.start(this.engine.hostTimeAt(startFrame));
+      if (duration !== undefined) oscillator.stop(this.engine.hostTimeAt(startFrame + Math.round(duration * context.sampleRate)));
       return currentVoice;
     } catch (cause) {
       const errors: unknown[] = [cause];
@@ -156,7 +157,7 @@ export class Voice {
   get state(): 'playing' | 'stopping' | 'ended' { return this.#ended ? 'ended' : this.#stopRequested ? 'stopping' : 'playing'; }
   stop(): void {
     if (this.#ended || this.#stopRequested) return;
-    try { this.#node!.stop(this.engine.currentTime); this.#stopRequested = true; }
+    try { this.#node!.stop(this.engine.hostTimeAt(this.engine.currentFrame)); this.#stopRequested = true; }
     catch (cause) { throw new TuneError('HOST_FAILURE', 'The host could not stop the voice.', 'Dispose the voice or engine to release remaining host resources.', { cause }); }
   }
   private finish(): void {
@@ -198,6 +199,9 @@ export class Engine {
     return this.#state;
   }
   get currentTime(): number { return this.#context?.currentTime ?? 0; }
+  get sampleRate(): number | null { return this.#context?.sampleRate ?? null; }
+  get currentFrame(): number { return this.#context ? Math.round(this.#context.currentTime * this.#context.sampleRate) : 0; }
+  /** @internal */ hostTimeAt(frame: number): number { return this.adapter.hostTime(integerFrame(frame, 'frame'), this.#context!.sampleRate); }
   get diagnostics() {
     return { state: this.state, backend: this.adapter.name, sampleRate: this.#context?.sampleRate ?? null, nodes: this.nodes.size, voices: this.voices.size, cachedAssetBytes: 0, taps: 0, underruns: null, outputLatencySeconds: null };
   }

@@ -2,10 +2,12 @@ import type { Engine } from './engine.js';
 import { TuneError, finite } from './errors.js';
 import { Instrument, noteToFrequency } from './instrument.js';
 import { Kit } from './kit.js';
+import { Sample } from './sample.js';
 import type { InstrumentVoice } from './instrument.js';
+import type { SampleVoice } from './sample.js';
 
 export type Beats = { beats: number };
-export interface PatternEvent { beat: number; notes: string | string[]; duration: Beats; velocity?: number }
+export interface PatternEvent { beat: number; notes: string | string[]; duration: Beats; velocity?: number; region?: { start: number; end?: number } }
 export interface PatternData { length: Beats; events: readonly PatternEvent[] }
 export interface TempoAck { effectiveBeat: number; appliedAt: 'now' | 'next-bar' }
 
@@ -28,7 +30,13 @@ export class Pattern {
       if (typeof notes === 'string' ? !notes : !Array.isArray(notes) || notes.length === 0 || notes.some(note => typeof note !== 'string' || !note)) {
         throw new TuneError('INVALID_VALUE', `Event ${index} needs nonempty note or hit names.`, 'Pass a name string or a nonempty array of names.');
       }
-      return Object.freeze({ beat, notes: Array.isArray(notes) ? Object.freeze(notes.slice()) : notes, duration: Object.freeze({ beats: durationBeats }), velocity });
+      const region = event?.region === undefined ? undefined : (() => {
+        const start = finite(event.region?.start ?? NaN, 0, Number.MAX_SAFE_INTEGER, `event ${index} region start`);
+        const end = event.region?.end === undefined ? undefined : finite(event.region.end, 0, Number.MAX_SAFE_INTEGER, `event ${index} region end`);
+        if (end !== undefined && end <= start) throw new TuneError('INVALID_VALUE', `Event ${index} region end must exceed its start.`, 'Choose an end after start.');
+        return Object.freeze({ start, ...(end === undefined ? {} : { end }) });
+      })();
+      return Object.freeze({ beat, notes: Array.isArray(notes) ? Object.freeze(notes.slice()) : notes, duration: Object.freeze({ beats: durationBeats }), velocity, ...(region === undefined ? {} : { region }) });
     });
     // Array.prototype.sort is stable; equal beats keep declaration order.
     events.sort((a, b) => a.beat - b.beat);
@@ -80,12 +88,13 @@ export class Part {
   #pending: { pattern: Pattern; atBeat: number } | null = null;
   /** Next unscheduled occurrence within the active pattern. */
   #cursor = { iteration: 0, index: 0 };
-  readonly #live = new Set<InstrumentVoice>();
-  /** @internal */ constructor(readonly transport: Transport, pattern: Pattern, readonly target: Instrument | Kit, readonly startBeat: number, readonly loop: boolean) {
+  readonly #live = new Set<InstrumentVoice | SampleVoice>();
+  /** @internal */ constructor(readonly transport: Transport, pattern: Pattern, readonly target: Instrument | Kit | Sample, readonly startBeat: number, readonly loop: boolean) {
     this.#pattern = pattern;
     this.#epochBeat = startBeat;
   }
   get pattern(): Pattern { return this.#pattern; }
+  /** @internal */ get pendingReplace(): { pattern: Pattern; atBeat: number } | null { return this.#pending; }
   /** Next occurrence after the cursor, or null when a non-looping part is exhausted. */
   #nextOccurrence(): Occurrence | null {
     const events = this.#pattern.events;
@@ -137,7 +146,9 @@ export class Part {
       let start = startFrame;
       if (startFrame < currentFrame) { transport.noteLate((currentFrame - startFrame) / sampleRate); start = currentFrame; }
       try {
-        const handle = this.target.play(occurrence.event.notes as string | string[], { velocity: occurrence.event.velocity, duration: { seconds: (endFrame - start) / sampleRate }, at: { frame: start } });
+        const handle = this.target instanceof Sample
+          ? this.target.play({ at: { frame: start }, duration: { seconds: (endFrame - start) / sampleRate }, region: occurrence.event.region })
+          : this.target.play(occurrence.event.notes as string | string[], { velocity: occurrence.event.velocity, duration: { seconds: (endFrame - start) / sampleRate }, at: { frame: start } });
         this.#live.add(handle);
         transport.noteScheduled();
       } catch (error) {
@@ -177,7 +188,7 @@ export class Part {
     this.#pending = null;
     if (this.state === 'playing') this.state = 'scheduled';
   }
-  /** @internal */ get liveVoices(): readonly InstrumentVoice[] { return [...this.#live]; }
+  /** @internal */ get liveVoices(): readonly (InstrumentVoice | SampleVoice)[] { return [...this.#live]; }
 }
 
 export class Transport {
@@ -216,6 +227,8 @@ export class Transport {
       set(value: number) { return self.setBpm(value); },
     };
   }
+  /** @internal */ get parts(): ReadonlySet<Part> { return this.#parts; }
+  /** @internal */ get pendingTempo(): { bpm: number; effectiveBeat: number } | null { return this.#pendingBpm; }
   get state(): 'stopped' | 'running' | 'paused' { return this.#state; }
   /** @internal */ get currentBeat(): number {
     if (this.#state === 'stopped' || !this.#map) return 0;
@@ -301,9 +314,9 @@ export class Transport {
     this.#pendingBpm = null;
     this.#map = null;
   }
-  schedule(pattern: Pattern, target: Instrument | Kit, options: { at?: Beats; loop?: boolean } = {}): Part {
+  schedule(pattern: Pattern, target: Instrument | Kit | Sample, options: { at?: Beats; loop?: boolean } = {}): Part {
     if (this.#disposed) throw new TuneError('DISPOSED', 'The transport is disposed.', 'Create a new engine.');
-    if (!(target instanceof Instrument) && !(target instanceof Kit)) throw new TuneError('INVALID_VALUE', 'A part target must be an instrument or kit.', 'Pass an Instrument or Kit owned by this engine.');
+    if (!(target instanceof Instrument) && !(target instanceof Kit) && !(target instanceof Sample)) throw new TuneError('INVALID_VALUE', 'A part target must be an instrument, kit or sample.', 'Pass an Instrument, Kit or Sample owned by this engine.');
     if (target.engine !== this.engine) throw new TuneError('CROSS_ENGINE', 'The target belongs to another engine.', 'Use a target owned by this engine.');
     if (!(pattern instanceof Pattern)) throw new TuneError('INVALID_VALUE', 'schedule needs an engine.pattern() value.', 'Build the pattern first.');
     const events = pattern.events;

@@ -34,6 +34,7 @@ export function recordReuse(adapter) {
     seek(seconds) { return voice?.seek(seconds); },
     readMeter() { return meter?.read(); },
     get recording() { return recording; },
+    get sampleNode() { return sample; },
     get recorder() { return recorder; },
     get microphone() { return microphone; },
     async dispose() {

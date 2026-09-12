@@ -1,4 +1,4 @@
-export type ErrorCode = 'DISPOSED' | 'INVALID_VALUE' | 'CROSS_ENGINE' | 'INVALID_CONNECTION' | 'NOT_RUNNING' | 'ACTIVATION_FAILED' | 'HOST_FAILURE' | 'UNSUPPORTED' | 'ASSET_FAILED' | 'CANCELLED' | 'PERMISSION_DENIED' | 'NO_DEVICE' | 'OVERFLOW';
+export type ErrorCode = 'DISPOSED' | 'INVALID_VALUE' | 'CROSS_ENGINE' | 'INVALID_CONNECTION' | 'NOT_RUNNING' | 'ACTIVATION_FAILED' | 'HOST_FAILURE' | 'UNSUPPORTED' | 'ASSET_FAILED' | 'CANCELLED' | 'PERMISSION_DENIED' | 'NO_DEVICE' | 'OVERFLOW' | 'PROJECT_INVALID';
 export class TuneError extends Error {
   override readonly name = 'TuneError';
   constructor(readonly code: ErrorCode, message: string, readonly recovery: string, options?: ErrorOptions) {

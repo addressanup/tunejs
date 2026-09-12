@@ -2,7 +2,7 @@ import type { HostBuffer, HostBufferSource, HostContext, HostGain } from './back
 import type { DecodedWav } from './assets.js';
 import { resample } from './assets.js';
 import type { Engine } from './engine.js';
-import { TuneError, finite } from './errors.js';
+import { TuneError, finite, integerFrame } from './errors.js';
 import { GraphNode } from './graph.js';
 import type { OwnedVoice, Seconds } from './graph.js';
 
@@ -28,6 +28,7 @@ export class Sample extends GraphNode {
   get channels(): number { return this.entry.decoded.channels.length; }
   get frames(): number { return this.entry.decoded.frames; }
   get duration(): number { return this.frames / this.sampleRate; }
+  /** @internal */ validateNames(_names: readonly string[]): void { /* every name is valid for a sample target */ }
   /** @internal */ register(voice: SampleVoice): void { this.#voices.add(voice); }
   /** @internal */ unregister(voice: SampleVoice): void { this.#voices.delete(voice); }
   /** @internal */ override prepare(context: HostContext): void {
@@ -49,11 +50,12 @@ export class Sample extends GraphNode {
       throw cause;
     }
   }
-  play(options: { region?: { start: number; end?: number }; loop?: boolean; rate?: number; duration?: Seconds } = {}): SampleVoice {
+  play(options: { region?: { start: number; end?: number }; loop?: boolean; rate?: number; duration?: Seconds; at?: { frame: number } } = {}): SampleVoice {
     this.assertAlive();
     const context = this.engine.runningContext();
     const rate = finite(options.rate ?? 1, 0.25, 4, 'playback rate');
     const duration = options.duration && finite(options.duration.seconds, 0.001, 3600, 'duration seconds');
+    const startFrame = options.at === undefined ? this.engine.currentFrame : integerFrame(finite(options.at.frame, 0, Number.MAX_SAFE_INTEGER, 'at frame'), 'at frame');
     const regionStart = options.region?.start ?? 0;
     if (!Number.isFinite(regionStart) || regionStart < 0 || regionStart >= this.duration) {
       throw new TuneError('INVALID_VALUE', 'Region start must be within [0, duration).', 'Choose a start inside the asset.');
@@ -65,7 +67,7 @@ export class Sample extends GraphNode {
     const loop = options.loop ?? false;
     let voice: SampleVoice | undefined;
     try {
-      const created = new SampleVoice(this.engine, this, regionStart, regionEnd, rate, loop, duration, context);
+      const created = new SampleVoice(this.engine, this, regionStart, regionEnd, rate, loop, duration, context, startFrame);
       voice = created;
       this.register(created);
       return created;
@@ -99,13 +101,12 @@ export class SampleVoice implements OwnedVoice {
   #startTime: number;
   #stopFrame?: number;
   #lastPosition?: number;
-  constructor(private engine: Engine, private sample: Sample, private regionStart: number, private regionEnd: number, private rate: number, private loop: boolean, duration: number | undefined, private context: HostContext) {
+  constructor(private engine: Engine, private sample: Sample, private regionStart: number, private regionEnd: number, private rate: number, private loop: boolean, duration: number | undefined, private context: HostContext, startFrame = engine.currentFrame) {
     this.#startOffset = this.#offset = regionStart;
-    this.#startTime = context.currentTime;
+    this.#startTime = engine.hostTimeAt(startFrame);
     try {
       const source = this.createSource(regionStart);
       this.#source = source;
-      const startFrame = engine.currentFrame;
       source.start(engine.hostTimeAt(startFrame), regionStart, loop ? undefined : regionEnd - regionStart);
       if (duration !== undefined) {
         this.#stopFrame = startFrame + Math.round(duration * context.sampleRate);
@@ -127,7 +128,7 @@ export class SampleVoice implements OwnedVoice {
   private computePosition(): number {
     const elapsed = (this.context.currentTime - this.#startTime) * this.rate;
     const position = this.#offset + elapsed;
-    if (!this.loop) return Math.min(position, this.regionEnd);
+    if (!this.loop) return Math.min(Math.max(position, this.regionStart), this.regionEnd);
     const span = this.regionEnd - this.regionStart;
     return this.regionStart + (((position - this.regionStart) % span) + span) % span;
   }

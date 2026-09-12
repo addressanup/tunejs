@@ -3,12 +3,14 @@ import { AppState, Button, Platform, ScrollView, Text, View } from 'react-native
 import { AudioContext, OfflineAudioContext } from 'react-native-audio-api';
 import { nativeAdapter } from 'tunejs/native';
 import { firstSound } from './generated/first-sound';
+import { livingLoop } from './generated/living-loop';
 import { runFixtures } from './generated/fixtures';
 import { runLiveProbes } from './generated/live-probes';
 
 export default function App() {
   const adapter = nativeAdapter(() => new AudioContext());
   const [sound] = useState(() => firstSound(adapter));
+  const [loop] = useState(() => livingLoop(adapter));
   const [status, setStatus] = useState('Idle — tap Play to activate audio');
   const [results, setResults] = useState('Offline fixtures running');
   const act = async (action: () => unknown) => { try { await action(); setStatus(JSON.stringify(sound.engine.diagnostics)); } catch(error) { setStatus(String(error)); } };
@@ -30,7 +32,7 @@ export default function App() {
         await fetch(`${endpoint}/results/native`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data,null,2)});
       } catch(error) { if(alive) setResults(String(error)); }
     })();
-    return () => { alive=false; subscription.remove(); void sound.dispose().catch(console.error); };
+    return () => { alive=false; subscription.remove(); void loop.dispose().catch(console.error); void sound.dispose().catch(console.error); };
   }, [sound]);
   return <ScrollView contentContainerStyle={{padding:28,paddingTop:70,gap:16}}>
     <Text style={{fontSize:36,fontWeight:'600'}}>TuneJS · First sound</Text>
@@ -43,6 +45,11 @@ export default function App() {
     <Button title="Short release · 0.1 s" onPress={() => void act(() => sound.keys.setEnvelope({release:0.1}))} />
     <Button title="Suspend" onPress={() => void act(() => sound.engine.suspend())} />
     <Button title="Dispose" onPress={() => void act(sound.dispose)} />
+    <Text style={{fontSize:18,fontWeight:'600'}}>Living loop</Text>
+    <Button title="Start loop" onPress={() => void act(loop.start)} />
+    <Button title="Stop loop" onPress={() => void act(loop.stop)} />
+    <Button title="Replace phrase" onPress={() => void act(() => loop.replacePhrase())} />
+    <Button title="Tempo 124" onPress={() => void act(() => loop.setTempo(124))} />
     <Text selectable>{status}</Text><View><Text selectable>{results}</Text></View>
   </ScrollView>;
 }

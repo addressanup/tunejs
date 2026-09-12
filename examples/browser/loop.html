@@ -1,0 +1,28 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TuneJS · Living loop</title>
+<style>body{max-width:760px;margin:60px auto;padding:0 24px;background:#f6f3eb;color:#242a24;font:18px/1.6 system-ui}h1{font-size:52px;letter-spacing:-2px;margin-bottom:0}button{font:inherit;padding:10px 20px;border:1px solid #647263;background:#fff;border-radius:4px;margin:6px 8px 6px 0;cursor:pointer}button:focus-visible{outline:3px solid #27784a}pre{white-space:pre-wrap;font-size:13px;background:#e8ece2;padding:18px;overflow-wrap:anywhere}small{color:#465446}</style>
+<script type="importmap">{"imports":{"tunejs":"/dist/index.js","tunejs/browser":"/dist/adapters/browser.js","tunejs/presets":"/dist/presets.js"}}</script>
+<h1>TuneJS</h1><p>A loop that keeps running while you change it.</p>
+<small>Living-loop development snapshot · softKeys + softDrums under a transport at 108 bpm</small>
+<p><button id="start">Start</button><button id="stop">Stop</button><button id="replace">Replace phrase</button><button id="t124">Tempo 124</button><button id="t96">Tempo 96</button></p>
+<p id="status" role="status">Idle. Press Start to activate output.</p><pre id="diagnostics"></pre>
+<p><small>Phrase and tempo changes apply at the next bar. A running state does not confirm audible output. Check volume and route if silent.</small></p>
+<p><a href="/examples/browser/index.html">First-sound example</a></p>
+<script type="module">
+import { browserAdapter } from 'tunejs/browser';
+import { livingLoop } from '/examples/shared/living-loop.js';
+const loop = livingLoop(browserAdapter());
+const status = document.querySelector('#status');
+function report() { document.querySelector('#diagnostics').textContent = JSON.stringify(loop.transport.diagnostics, null, 2); }
+function failure(error) { status.textContent = `${error.code ?? error.name}: ${error.message} ${error.recovery ?? ''}`; report(); }
+document.querySelector('#start').onclick = async () => { try { await loop.start(); status.textContent = loop.transport.state; report(); } catch(error) { failure(error); } };
+document.querySelector('#stop').onclick = () => { try { loop.stop(); status.textContent = loop.transport.state; report(); } catch(error) { failure(error); } };
+document.querySelector('#replace').onclick = () => { try { const ack = loop.replacePhrase(); status.textContent = `Phrase applies at beat ${ack.effectiveBeat}`; report(); } catch(error) { failure(error); } };
+document.querySelector('#t124').onclick = () => { try { const ack = loop.setTempo(124); status.textContent = `Tempo ${ack.appliedAt === 'now' ? 'now' : `from beat ${ack.effectiveBeat}`}`; report(); } catch(error) { failure(error); } };
+document.querySelector('#t96').onclick = () => { try { const ack = loop.setTempo(96); status.textContent = `Tempo ${ack.appliedAt === 'now' ? 'now' : `from beat ${ack.effectiveBeat}`}`; report(); } catch(error) { failure(error); } };
+const timer = setInterval(report, 200);
+const hidden = () => { if (document.hidden && loop.engine.state !== 'disposed') loop.engine.suspend().catch(failure); };
+document.addEventListener('visibilitychange', hidden);
+window.addEventListener('pagehide', () => { clearInterval(timer); document.removeEventListener('visibilitychange', hidden); loop.dispose().catch(failure); }, { once: true });
+report();
+</script></html>

@@ -10,6 +10,8 @@ import type { SampleAsset, SampleEntry } from './sample.js';
 import { Bus, Delay, Pan, Reverb, mulberry32 } from './mixing.js';
 import { Kit } from './kit.js';
 import type { KitPreset } from './kit.js';
+import { Pattern, Transport } from './transport.js';
+import type { PatternData } from './transport.js';
 import type { HostBuffer, HostGain } from './backend.js';
 export type EngineState = 'idle' | 'starting' | 'running' | 'suspended' | 'interrupted' | 'failed' | 'disposed';
 
@@ -17,6 +19,7 @@ export class Engine {
   /** @internal */ readonly nodes = new Set<GraphNode>();
   /** @internal */ readonly voices = new Set<OwnedVoice>();
   readonly output: GraphNode;
+  readonly transport: Transport;
   /** @internal */ readonly adapter: Adapter;
   #context?: HostContext;
   #master?: HostGain;
@@ -28,8 +31,9 @@ export class Engine {
   #disposing?: Promise<void>;
   constructor(options: { adapter: Adapter }) {
     this.adapter = options.adapter; this.output = new GraphNode(this, 'output'); this.nodes.add(this.output);
+    this.transport = new Transport(this);
     const fanOut = this.adapter.hostLimits.fanOut;
-    this.capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, kits: true, fanOut, delay: fanOut, reverb: fanOut, spatial: false, capture: false, projects: false, offline: false, backgroundPlayback: false });
+    this.capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, kits: true, transport: true, patterns: true, fanOut, delay: fanOut, reverb: fanOut, spatial: false, capture: false, projects: false, offline: false, backgroundPlayback: false });
   }
   get state(): EngineState {
     if (this.#state === 'running' && this.#context?.state !== 'running') return this.#context?.state === 'suspended' ? 'suspended' : 'interrupted';
@@ -92,6 +96,7 @@ export class Engine {
     if (this.#suspending) return this.#suspending;
     this.#suspending = (async () => {
       await this.#starting; this.assertAlive();
+      this.transport.pause();
       const errors: unknown[] = [];
       for (const voice of [...this.voices]) try { voice.dispose(); } catch (error) { errors.push(error); }
       try { await this.#context?.suspend(); this.assertAlive(); this.#state = 'suspended'; } catch (error) { this.assertAlive(); this.#state = 'failed'; errors.push(error); }
@@ -108,6 +113,7 @@ export class Engine {
     return this.add(new Oscillator(this, frequency, wave));
   }
   gain(options: { gain?: number } = {}): Gain { this.assertAlive(); return this.add(new Gain(this, options.gain ?? 0.1)); }
+  pattern(data: PatternData): Pattern { this.assertAlive(); return new Pattern(data); }
   filter(options: { type?: 'lowpass' | 'highpass'; frequencyHz?: number } = {}): Filter {
     this.assertAlive(); const type = options.type ?? 'lowpass';
     if (type !== 'lowpass' && type !== 'highpass') throw new TuneError('INVALID_VALUE', 'Unknown filter type.', 'Use lowpass or highpass.');
@@ -228,6 +234,7 @@ export class Engine {
     const master = this.#master;
     this.#master = undefined;
     this.output.host = undefined;
+    this.transport.dispose();
     this.#disposing = (async () => {
       const errors: unknown[] = [];
       for (const voice of [...this.voices]) try { voice.dispose(); } catch (error) { errors.push(error); }

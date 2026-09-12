@@ -44,6 +44,11 @@ export class Kit extends GraphNode {
   get activeVoices(): number { return this.#live.size; }
   /** @internal */ register(voice: SynthVoice): void { this.#live.add(voice); }
   /** @internal */ unregister(voice: SynthVoice): void { this.#live.delete(voice); }
+  /** @internal */ validateNames(names: readonly string[]): void {
+    for (const name of names) {
+      if (!this.#hits[name]) throw new TuneError('INVALID_VALUE', `Unknown hit '${name}'.`, `Available hits: ${this.hits.join(', ')}.`);
+    }
+  }
   /** @internal */ override prepare(context: HostContext): void {
     let levelGain: HostGain | undefined;
     try {

@@ -6,6 +6,8 @@ export { Instrument, InstrumentVoice, noteToFrequency } from './instrument.js';
 export type { Envelope, InstrumentPreset, InstrumentLayer, PlayOptions } from './instrument.js';
 export { Kit } from './kit.js';
 export type { KitPreset, HitPreset } from './kit.js';
+export { Transport, Pattern, Part } from './transport.js';
+export type { Beats, PatternEvent, PatternData, TempoAck } from './transport.js';
 export { Sample, SampleVoice } from './sample.js';
 export type { SampleAsset } from './sample.js';
 export { Bus, Pan, Delay, Reverb, syntheticReverbResponse } from './mixing.js';

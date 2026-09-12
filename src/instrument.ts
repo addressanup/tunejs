@@ -128,6 +128,7 @@ export class Instrument extends GraphNode {
   get activeVoices(): number { return this.#live.size; }
   /** @internal */ register(voice: SynthVoice): void { this.#live.add(voice); }
   /** @internal */ unregister(voice: SynthVoice): void { this.#live.delete(voice); }
+  /** @internal */ validateNames(names: readonly string[]): void { for (const name of names) noteToFrequency(name); }
   /** @internal */ override prepare(context: HostContext): void {
     let filter: HostFilter | undefined; let levelGain: HostGain | undefined;
     try {

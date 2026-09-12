@@ -1,0 +1,10 @@
+{
+  "workloadVersion": 1,
+  "definition": "experiments/workload.js: four looping mono sample voices through stereo spatial emitters, four-note softKeys chords every beat at 120 BPM through a delay bus, 60 Hz emitter/listener pose updates, 30 Hz meter subscription, a 100 ms JS busy period every second. Stereo mode only (binaural is not implemented). Hosts expose no underrun counter; only engine-side accounting is measured.",
+  "runs": {
+    "browser-600s": {"host": "headless Google Chrome on this Mac, packed consumer build", "totals": {"lateEvents": 0, "maxLatenessSeconds": 0, "skippedEvents": 0, "scheduledEvents": 1201, "interruptions": 0, "errors": 0, "meterReads": 10254, "meterDroppedFrames": 0, "poseUpdates": 34505, "busyPeriods": 600, "maxBusyMs": 100.1, "peakVoices": 16, "clockDriftSeconds": 0.058, "disposedNodes": 0, "disposedVoices": 0}, "recordedStatus": "fail", "reason": "the harness's original voice bound (4 loops + 8) was wrong: released chord voices remain allocated until the host's ended event, which the busy thread delays, so 16 live voices (4 + 12) is expected behaviour, not a leak; every timing, drop, interruption and cleanup gate was zero. The bound was corrected to 4 + the instrument's polyphony ceiling after this run and the raw payload is kept unchanged."},
+    "browser-60s": {"recordedStatus": "pass"},
+    "electron-120s": {"host": "Electron 44.2.0 / Chromium 152.0.7977.76 on macOS, TUNEJS_AUTOPLAY=1", "totals": {"lateEvents": 0, "maxLatenessSeconds": 0, "skippedEvents": 0, "scheduledEvents": 241, "interruptions": 0, "errors": 0, "meterReads": 2032, "meterDroppedFrames": 0, "poseUpdates": 6905, "busyPeriods": 120, "maxBusyMs": 100.1, "peakVoices": 12, "clockDriftSeconds": 0.011, "disposedNodes": 0, "disposedVoices": 0}, "recordedStatus": "pass"}
+  },
+  "notCovered": "audible dropouts (no counter, no listening/loopback), Firefox and Safari, physical iPhone Safari and Android Chrome, release-mode React Native workload on devices (the phone was disconnected before the lifecycle cycles could run), latency measurement, listening review, usability evaluation."
+}

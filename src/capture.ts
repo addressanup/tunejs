@@ -220,6 +220,10 @@ export class Meter {
   #disposed = false;
   readonly #timers: MeterTimers;
   readonly #minIntervalMs: number;
+  /** The underlying tap's diagnostics — queue depth and drop accounting. */
+  get diagnostics(): TapDiagnostics | { state: 'active'; delivered: 0; droppedFrames: 0; queuedFrames: 0; peakQueuedFrames: 0 } {
+    return this.#tap?.diagnostics ?? { state: 'active', delivered: 0, droppedFrames: 0, queuedFrames: 0, peakQueuedFrames: 0 };
+  }
   /** @internal */ constructor(readonly engine: Engine, readonly source: GraphNode, readonly updatesPerSecond: number, timers?: MeterTimers) {
     this.#timers = timers ?? { now: () => globalThis.performance.now(), set: (fn, ms) => globalThis.setInterval(fn, ms), clear: handle => { globalThis.clearInterval(handle as Parameters<typeof clearInterval>[0]); } };
     this.#minIntervalMs = 1000 / updatesPerSecond;

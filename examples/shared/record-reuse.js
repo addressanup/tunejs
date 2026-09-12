@@ -1,5 +1,5 @@
 // Shared by browser, Electron and React Native. Host UI owns teardown/subscriptions.
-import { Engine } from 'tunejs';
+import { Engine, TuneError } from 'tunejs';
 
 // Microphone → meter (level) → bounded recorder → WAV asset → sample playback. No monitoring path.
 export function recordReuse(adapter) {
@@ -35,6 +35,15 @@ export function recordReuse(adapter) {
     readMeter() { return meter?.read(); },
     get recording() { return recording; },
     get sampleNode() { return sample; },
+    // Deterministic TuneJS-DSP render of the current project; resolves 'take-1' from the recording.
+    async renderProject({ tail = { seconds: 0.5 }, range = { fromBeat: 0, toBeat: 4 } } = {}) {
+      if (!recording) throw new TuneError('INVALID_VALUE', 'Nothing to render.', 'Record a take first.');
+      const bytes = recording.toWav().bytes;
+      return Engine.render(engine.exportProject().project, {
+        range, tail, sampleRate: engine.sampleRate === 44100 ? 44100 : 48000,
+        resolveAsset: async id => { if (id !== 'take-1') throw new Error(`unknown asset '${id}'`); return bytes; },
+      });
+    },
     get recorder() { return recorder; },
     get microphone() { return microphone; },
     async dispose() {

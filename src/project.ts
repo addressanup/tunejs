@@ -121,15 +121,12 @@ export function exportProject(engine: Engine): { project: ProjectV1; warnings: s
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 const KNOWN_TYPES = new Set(['oscillator', 'gain', 'filter', 'instrument', 'kit', 'sample', 'bus', 'pan', 'delay', 'reverb', 'spatial']);
 
-/** @internal — called by Engine.importProject. */
-export async function importProject(engine: Engine, project: unknown, options: { resolveAsset?: (id: string) => Promise<ArrayBuffer | ArrayBufferView> } = {}): Promise<{ nodes: Map<string, GraphNode>; parts: Part[] }> {
-  engine.assertAlive();
-  // Phase 1: collect every structural problem before creating anything.
+/** @internal — shared phase-1 validation used by importProject and Engine.render. Returns parsed sections plus every problem found; callers append host-specific problems and throw. */
+export function checkProject(project: unknown): { p: ProjectV1; defs: ProjectNode[]; connections: ProjectV1['connections']; patternDefs: ProjectV1['patterns']; partDefs: ProjectV1['parts']; manifest: Map<string, { sampleRate: number; channels: number; frames: number; integrity: string }>; problems: string[] } {
   const problems: string[] = [];
   const p = project as ProjectV1;
   if (!isObject(p) || p.format !== 'tunejs-project') problems.push('format must be "tunejs-project"');
   if (!isObject(p) || p.version !== 1) problems.push('version must be 1');
-  if (engine.transport.state !== 'stopped') problems.push('the transport must be stopped');
   const defs: ProjectNode[] = isObject(p) && Array.isArray(p.nodes) ? p.nodes : [];
   const ids = new Set<string>();
   for (const def of defs) {
@@ -185,13 +182,14 @@ export async function importProject(engine: Engine, project: unknown, options: {
       if (!manifest.has(def.assetId as string)) problems.push(`sample node '${def.id}' references asset '${String(def.assetId)}' missing from the manifest`);
     }
   }
-  if (problems.length) {
-    throw new TuneError('PROJECT_INVALID', `The project is invalid: ${problems.join('; ')}.`, 'Fix the project data and retry.');
-  }
-  // Phase 2: resolve and verify assets before building anything.
+  return { p, defs, connections, patternDefs, partDefs, manifest, problems };
+}
+
+/** @internal — phase 2 shared by importProject and Engine.render. */
+export async function resolveProjectAssets(defs: ProjectNode[], manifest: Map<string, { sampleRate: number; channels: number; frames: number; integrity: string }>, resolveAsset?: (id: string) => Promise<ArrayBuffer | ArrayBufferView>): Promise<Map<string, { bytes: ArrayBuffer | ArrayBufferView; decoded: DecodedWav }>> {
   const sampleDefs = defs.filter(def => isObject(def) && def.type === 'sample');
   const decodedAssets = new Map<string, { bytes: ArrayBuffer | ArrayBufferView; decoded: DecodedWav }>();
-  if (sampleDefs.length && !options.resolveAsset) {
+  if (sampleDefs.length && !resolveAsset) {
     throw new TuneError('PROJECT_INVALID', 'The project contains sample nodes but no resolveAsset callback was provided.', 'Pass { resolveAsset } returning the asset bytes by id.');
   }
   for (const def of sampleDefs) {
@@ -199,7 +197,7 @@ export async function importProject(engine: Engine, project: unknown, options: {
     if (decodedAssets.has(assetId)) continue;
     const expected = manifest.get(assetId)!;
     let bytes: ArrayBuffer | ArrayBufferView;
-    try { bytes = await options.resolveAsset!(assetId); }
+    try { bytes = await resolveAsset!(assetId); }
     catch (cause) { throw new TuneError('ASSET_FAILED', `Resolving asset '${assetId}' failed.`, 'Check the asset source and retry.', { cause }); }
     let decoded: DecodedWav;
     try { decoded = decodeWav(bytes); }
@@ -213,6 +211,18 @@ export async function importProject(engine: Engine, project: unknown, options: {
     }
     decodedAssets.set(assetId, { bytes, decoded });
   }
+  return decodedAssets;
+}
+
+/** @internal — called by Engine.importProject. */
+export async function importProject(engine: Engine, project: unknown, options: { resolveAsset?: (id: string) => Promise<ArrayBuffer | ArrayBufferView> } = {}): Promise<{ nodes: Map<string, GraphNode>; parts: Part[] }> {
+  engine.assertAlive();
+  const { p, defs, connections, patternDefs, partDefs, manifest, problems } = checkProject(project);
+  if (engine.transport.state !== 'stopped') problems.push('the transport must be stopped');
+  if (problems.length) {
+    throw new TuneError('PROJECT_INVALID', `The project is invalid: ${problems.join('; ')}.`, 'Fix the project data and retry.');
+  }
+  const decodedAssets = await resolveProjectAssets(defs, manifest, options.resolveAsset);
   // Phase 3: build, atomically — on failure dispose everything created and rethrow.
   const created: GraphNode[] = [];
   const createdParts: Part[] = [];

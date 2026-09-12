@@ -14,6 +14,7 @@ export { Tap, Input, Recorder, Recording, Meter } from './capture.js';
 export type { PCMChunk, TapDiagnostics, MeterSnapshot, MeterTimers } from './capture.js';
 export { encodeWav, fnv1a64Float32 } from './assets.js';
 export type { ProjectV1, ProjectNode } from './project.js';
+export type { RenderResult } from './render.js';
 export { Sample, SampleVoice } from './sample.js';
 export type { SampleAsset } from './sample.js';
 export { Bus, Pan, Delay, Reverb, syntheticReverbResponse } from './mixing.js';

@@ -17,10 +17,22 @@ import type { SpatialSourceOptions } from './spatial.js';
 import { Input, Meter, Recorder, Tap } from './capture.js';
 import type { MeterTimers } from './capture.js';
 import { exportProject, importProject } from './project.js';
+import { renderProject } from './render.js';
+import type { RenderResult } from './render.js';
+import type { ProjectV1 } from './project.js';
 import type { HostBuffer, HostGain } from './backend.js';
 export type EngineState = 'idle' | 'starting' | 'running' | 'suspended' | 'interrupted' | 'failed' | 'disposed';
 
 export class Engine {
+  /** Deterministic TuneJS-DSP offline render of a project — identical output on every host. */
+  static async render(project: ProjectV1, options: {
+    range: { fromBeat: number; toBeat: number } | { fromSeconds: number; toSeconds: number };
+    tail: { seconds: number };
+    sampleRate: 44100 | 48000;
+    resolveAsset?: (id: string) => Promise<ArrayBuffer | ArrayBufferView>;
+    maxSeconds?: number;
+  }): Promise<RenderResult> { return renderProject(project, options); }
+
   /** @internal */ readonly nodes = new Set<GraphNode>();
   /** @internal */ readonly voices = new Set<OwnedVoice>();
   readonly output: GraphNode;

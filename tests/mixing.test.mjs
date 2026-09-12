@@ -19,7 +19,7 @@ function host() {
     createDelay(maxDelay){const events=[];const d={...mknode(),events,maxDelay,delayTime:mkparam(events)};delays.push(d);return d;},
     createConvolver(){const c={...mknode(),buffer:null,normalize:true};convolvers.push(c);return c;},
     async resume(){this.state='running';},async suspend(){this.state='suspended';},async close(){this.state='closed';}};
-  const adapter={name:'mixing-test-double',createContext(){return context;},setEnded(node,fn){node.onEnded=fn;},hostTime(frame,rate){hostCalls.push([frame,rate]);return frame/rate;}};
+  const adapter={hostLimits:{fanOut:true},name:'mixing-test-double',createContext(){return context;},setEnded(node,fn){node.onEnded=fn;},hostTime(frame,rate){hostCalls.push([frame,rate]);return frame/rate;}};
   return {engine:new Engine({adapter}),context,gains,panners,delays,convolvers,buffers,hostCalls};
 }
 

@@ -67,6 +67,9 @@ export class GraphNode {
       throw new TuneError('INVALID_CONNECTION', 'Routing requires an acyclic source → processor → output graph.', 'Remove the cycle or choose a processor/output target.');
     }
     if (!this.targets.has(target)) {
+      if (!this.engine.adapter.hostLimits.fanOut && this.targets.size >= 1) {
+        throw new TuneError('UNSUPPORTED', 'This host delivers only one outgoing connection per node.', 'Disconnect the current target first, or mix through a bus.');
+      }
       if (this.host && target.input) this.host.connect(target.input);
       this.targets.add(target);
     }

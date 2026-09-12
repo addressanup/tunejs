@@ -18,7 +18,7 @@ function host() {
     createBiquadFilter(){const events=[];const f={...mknode(),events,type:'lowpass',frequency:mkparam(events),Q:mkparam(events)};filters.push(f);return f;},
     createOscillator(){const events=[];const o={...mknode(),events,type:'sine',frequency:mkparam(events),starts:[],stops:[],start(t){this.starts.push(t);},stop(t){this.stops.push(t);}};oscs.push(o);return o;},
     async resume(){this.state='running';},async suspend(){this.state='suspended';},async close(){this.state='closed';}};
-  const adapter={name:'instrument-test-double',createContext(){return context;},setEnded(node,fn){node.onEnded=fn;},hostTime(frame,rate){hostCalls.push([frame,rate]);return frame/rate;}};
+  const adapter={hostLimits:{fanOut:true},name:'instrument-test-double',createContext(){return context;},setEnded(node,fn){node.onEnded=fn;},hostTime(frame,rate){hostCalls.push([frame,rate]);return frame/rate;}};
   return {engine:new Engine({adapter}),context,gains,oscs,filters,hostCalls};
 }
 function assertEvents(actual,expected) {

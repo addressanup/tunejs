@@ -4,6 +4,7 @@ import { TuneError, integerFrame } from '../errors.js';
 export function browserAdapter(): Adapter {
   return {
     name: 'web-audio',
+    hostLimits: { fanOut: true },
     createContext() {
       if (typeof globalThis.AudioContext !== 'function') {
         throw new TuneError('UNSUPPORTED', 'Web Audio is unavailable.', 'Use a browser with AudioContext support.');

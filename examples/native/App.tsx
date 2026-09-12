@@ -4,6 +4,7 @@ import { AudioContext, OfflineAudioContext } from 'react-native-audio-api';
 import { nativeAdapter } from 'tunejs/native';
 import { firstSound } from './generated/first-sound';
 import { runFixtures } from './generated/fixtures';
+import { runLiveProbes } from './generated/live-probes';
 
 export default function App() {
   const adapter = nativeAdapter(() => new AudioContext());
@@ -21,7 +22,9 @@ export default function App() {
         const createOffline = (o: {numberOfChannels:number;length:number;sampleRate:number}) => new OfflineAudioContext(o);
         const raw = await runFixtures(createOffline);
         const scheduled = await runFixtures(createOffline, {hostTime: adapter.hostTime, scheduling: 'native-adapter-frames'});
-        const data = {date:new Date().toISOString(),platform:Platform.OS,version:Platform.Version,rn:Platform.constants.reactNativeVersion,scope:'release simulator offline PCM; no physical-device validation',...raw,adapterScheduled:scheduled};
+        let live;
+        try { live = await runLiveProbes(() => new AudioContext(), { settleMs: 600 }); } catch(error) { live = { status: 'error', error: String(error) }; }
+        const data = {date:new Date().toISOString(),platform:Platform.OS,version:Platform.Version,rn:Platform.constants.reactNativeVersion,scope:'release simulator offline PCM; no physical-device validation',...raw,adapterScheduled:scheduled,live};
         if(alive) setResults(JSON.stringify(data,null,2));
         const endpoint = Platform.OS === 'android' ? 'http://10.0.2.2:4173' : 'http://127.0.0.1:4173';
         await fetch(`${endpoint}/results/native`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data,null,2)});

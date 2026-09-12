@@ -8,8 +8,8 @@ function host() {
   const node=()=>({connections:[],disconnects:0,connect(t){this.connections.push(t);},disconnect(){this.disconnects++;}});
   const context={state:'suspended',sampleRate:48000,currentTime:0,destination:node(),createGain:()=>({...node(),gain:param()}),createBiquadFilter:()=>({...node(),type:'lowpass',frequency:param(),Q:param()}),createOscillator:()=>({...node(),frequency:param(),type:'sine',start(){},stop(){}}),async resume(){this.state='running';},async suspend(){this.state='suspended';},async close(){this.state='closed';}};
   let creates=0;
-  const adapter={name:'unit-test-double',createContext(){creates++;return context;},setEnded(node,fn){node.onEnded=fn;},hostTime(frame,rate){events.push(['hostTime',frame,rate]);return frame/rate;}};
-  return {engine:new Engine({adapter}),context,events,creates:()=>creates};
+  const adapter={hostLimits:{fanOut:true},name:'unit-test-double',createContext(){creates++;return context;},setEnded(node,fn){node.onEnded=fn;},hostTime(frame,rate){events.push(['hostTime',frame,rate]);return frame/rate;}};
+  return {engine:new Engine({adapter}),adapter,context,events,creates:()=>creates};
 }
 const code=expected=>error=>error instanceof TuneError && error.code===expected;
 const flat=error=>[error?.message??String(error),...(error instanceof AggregateError?error.errors.flatMap(flat):[]),...(error?.cause?flat(error.cause):[])];
@@ -197,4 +197,20 @@ test('dispose disconnects the master gain once and closes the context',async()=>
  const h=host(),e=h.engine;const s=e.oscillator();s.connect(e.output);await e.start();
  const master=e.output.host;await e.dispose();
  assert.equal(master.disconnects,1);assert.equal(h.context.state,'closed');
+});
+test('host fan-out limit rejects a second outgoing edge and disables parallel effects',async()=>{
+ const h=host(),e=h.engine;
+ assert.equal(e.capabilities.fanOut,true);assert.equal(e.capabilities.delay,true);assert.equal(e.capabilities.reverb,true);
+ const limited=host();
+ const e2=new Engine({adapter:{...limited.adapter,hostLimits:{fanOut:false}}});
+ assert.equal(e2.capabilities.fanOut,false);assert.equal(e2.capabilities.delay,false);assert.equal(e2.capabilities.reverb,false);
+ const s=e2.oscillator(),g1=e2.gain(),g2=e2.gain();
+ s.connect(g1);s.connect(g1); // idempotent
+ assert.throws(()=>s.connect(g2),code('UNSUPPORTED'));
+ s.disconnect();s.connect(g2);
+ const before=e2.diagnostics.nodes;
+ assert.throws(()=>e2.delay(),code('UNSUPPORTED'));
+ assert.throws(()=>e2.reverb(),code('UNSUPPORTED'));
+ assert.equal(e2.diagnostics.nodes,before);
+ await e.dispose();await e2.dispose();
 });

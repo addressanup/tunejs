@@ -15,7 +15,7 @@ function host() {
     createBuffer(channels,frames,rate){const b={sampleRate:rate,length:frames,numberOfChannels:channels,copies:[],data:null,copyToChannel(src,i){this.copies.push([i,src.length]);if(i===0)this.data=src.slice();}};buffers.push(b);return b;},
     createBufferSource(){const ev=[];const s={...mknode(),events:ev,buffer:null,loop:false,loopStart:0,loopEnd:0,playbackRate:mkparam(ev),starts:[],stops:[],start(...a){this.starts.push(a);},stop(t){this.stops.push(t);}};sources.push(s);return s;},
     async resume(){this.state='running';},async suspend(){this.state='suspended';},async close(){this.state='closed';}};
-  const adapter={name:'kit-test-double',createContext(){return context;},setEnded(node,fn){node.onEnded=fn;},hostTime(frame,rate){events.push(['hostTime',frame,rate]);return frame/rate;}};
+  const adapter={hostLimits:{fanOut:true},name:'kit-test-double',createContext(){return context;},setEnded(node,fn){node.onEnded=fn;},hostTime(frame,rate){events.push(['hostTime',frame,rate]);return frame/rate;}};
   return {engine:new Engine({adapter}),context,events,gains,filters,oscs,buffers,sources};
 }
 

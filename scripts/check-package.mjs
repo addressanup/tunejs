@@ -54,6 +54,8 @@ async function example() {
   await e.start();
   s.play().stop();
   e.instrument(softKeys).play(['C4','E4'],{duration:{seconds:1}}).stop();
+  const clip = await e.sample({ id: 'clip', url: '/clip.wav' });
+  clip.play({ loop: true }).stop();
   await e.dispose();
 }
 void idle;

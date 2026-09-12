@@ -8,7 +8,8 @@
   "exports": {
     ".": {"types": "./dist/index.d.ts", "default": "./dist/index.js"},
     "./browser": {"types": "./dist/adapters/browser.d.ts", "default": "./dist/adapters/browser.js"},
-    "./native": {"types": "./dist/adapters/native.d.ts", "default": "./dist/adapters/native.js"}
+    "./native": {"types": "./dist/adapters/native.d.ts", "default": "./dist/adapters/native.js"},
+    "./presets": {"types": "./dist/presets.d.ts", "default": "./dist/presets.js"}
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

@@ -1,14 +1,16 @@
 <!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TuneJS · First sound</title>
 <style>body{max-width:760px;margin:60px auto;padding:0 24px;background:#f6f3eb;color:#242a24;font:18px/1.6 system-ui}h1{font-size:52px;letter-spacing:-2px;margin-bottom:0}button{font:inherit;padding:10px 20px;border:1px solid #647263;background:#fff;border-radius:4px;margin:6px 8px 6px 0;cursor:pointer}button:focus-visible,input:focus-visible{outline:3px solid #27784a}label{display:block;margin:20px 0}input{width:240px;vertical-align:middle}pre{white-space:pre-wrap;font-size:13px;background:#e8ece2;padding:18px;overflow-wrap:anywhere}small{color:#465446}</style>
-<script type="importmap">{"imports":{"tunejs":"/dist/index.js","tunejs/browser":"/dist/adapters/browser.js"}}</script>
+<script type="importmap">{"imports":{"tunejs":"/dist/index.js","tunejs/browser":"/dist/adapters/browser.js","tunejs/presets":"/dist/presets.js"}}</script>
 <h1>TuneJS</h1><p>Start with a sound. Change its shape.</p>
-<small>First-sound development snapshot · Oscillator → low-pass filter → gain → output</small>
-<p><button id="play">Play 2-second tone</button><button id="stop">Stop</button><button id="suspend">Suspend</button><button id="dispose">Dispose</button></p>
-<label>Filter <input id="filter" type="range" min="100" max="8000" value="1200"> <output id="cutoff">1200 Hz</output></label>
-<label>Level <input id="gain" type="range" min="0" max="0.15" step="0.005" value="0.06"></label>
+<small>First-sound development snapshot · softKeys instrument → output</small>
+<p><button id="play">Play chord</button><button id="stop">Stop</button><button id="suspend">Suspend</button><button id="dispose">Dispose</button></p>
+<label>Filter <input id="filter" type="range" min="100" max="8000" value="2400"> <output id="cutoff">2400 Hz</output></label>
+<label>Level <input id="gain" type="range" min="0" max="0.4" step="0.005" value="0.18"></label>
+<label>Attack <input id="attack" type="range" min="0" max="1" step="0.005" value="0.012"> <output id="attackOut">0.012 s</output></label>
+<label>Release <input id="release" type="range" min="0.001" max="3" step="0.01" value="0.4"> <output id="releaseOut">0.4 s</output></label>
 <p id="status" role="status">Idle. Press Play to activate output.</p><pre id="diagnostics"></pre>
-<p><small>A running state does not confirm audible output. Check volume and route if silent. Stop is immediate; click-free transitions and the softKeys preset are not implemented yet.</small></p>
+<p><small>A running state does not confirm audible output. Check volume and route if silent. The softKeys preset is implemented; stopping releases with the envelope rather than cutting immediately.</small></p>
 <p><a href="/experiments/browser.html">Run backend feasibility fixtures</a></p>
 <script type="module">
 import { browserAdapter } from 'tunejs/browser';
@@ -20,8 +22,10 @@ function failure(error) { status.textContent = `${error.code ?? error.name}: ${e
 for (const name of ['play','stop','suspend','dispose']) document.querySelector(`#${name}`).onclick = async () => {
   try { await (name === 'suspend' ? sound.engine.suspend() : sound[name]()); status.textContent = sound.engine.state; report(); } catch(error) { failure(error); }
 };
-document.querySelector('#filter').oninput = event => { try { sound.filter.frequencyHz.rampTo(+event.target.value, { seconds: 0.03 }); document.querySelector('#cutoff').textContent = `${event.target.value} Hz`; } catch(error) { failure(error); } };
-document.querySelector('#gain').oninput = event => { try { sound.level.gain.rampTo(+event.target.value, { seconds: 0.03 }); } catch(error) { failure(error); } };
+document.querySelector('#filter').oninput = event => { try { sound.keys.filterHz.rampTo(+event.target.value, { seconds: 0.03 }); document.querySelector('#cutoff').textContent = `${event.target.value} Hz`; } catch(error) { failure(error); } };
+document.querySelector('#gain').oninput = event => { try { sound.keys.level.rampTo(+event.target.value, { seconds: 0.03 }); } catch(error) { failure(error); } };
+document.querySelector('#attack').oninput = event => { try { sound.keys.setEnvelope({ attack: +event.target.value }); document.querySelector('#attackOut').textContent = `${event.target.value} s`; } catch(error) { failure(error); } };
+document.querySelector('#release').oninput = event => { try { sound.keys.setEnvelope({ release: +event.target.value }); document.querySelector('#releaseOut').textContent = `${event.target.value} s`; } catch(error) { failure(error); } };
 const timer = setInterval(report, 200);
 const hidden = () => { if (document.hidden && sound.engine.state !== 'disposed') sound.engine.suspend().catch(failure); };
 document.addEventListener('visibilitychange', hidden);

@@ -20,21 +20,21 @@ Each `npm run check:package` creates a fresh `artifacts/package-check-<id>/` dir
 ```js
 import { Engine } from 'tunejs';
 import { browserAdapter } from 'tunejs/browser';
+import { softKeys } from 'tunejs/presets';
 
 const engine = new Engine({ adapter: browserAdapter() });
-const source = engine.oscillator({ frequencyHz: 220, wave: 'triangle' });
-const filter = engine.filter({ frequencyHz: 1200 });
-source.connect(filter).connect(engine.gain({ gain: 0.06 })).connect(engine.output);
+const keys = engine.instrument(softKeys);
+keys.connect(engine.output);
 
 // Call directly inside the application's button/touch handler.
 await engine.start();
-const voice = source.play({ duration: { seconds: 2 } });
-filter.frequencyHz.rampTo(400, { seconds: 0.2 });
-voice.stop();
+const chord = keys.play(['C4', 'E4', 'G4'], { duration: { seconds: 1.5 } });
+keys.filterHz.rampTo(800, { seconds: 0.2 });
+chord.stop();
 await engine.dispose();
 ```
 
-This oscillator example is a milestone artifact. It is not yet the specified softKeys first-release example. Sources are reusable configuration and each `play` creates an independent voice. Ordinary application code never receives audio backend nodes. The core imports no React, React Native, Three.js or native audio library.
+This is the specified softKeys first-sound example; the bare oscillator path remains available for low-level use. Sources are reusable configuration and each `play` creates an independent voice. Ordinary application code never receives audio backend nodes. The core imports no React, React Native, Three.js or native audio library.
 
 ## Current API and semantics
 
@@ -47,10 +47,13 @@ This oscillator example is a milestone artifact. It is not yet the specified sof
 - Engine diagnostics expose owned graph/voice counts, zero currently allocated asset/tap resources, actual sample rate after activation, and unknown latency/underruns as `null`. These are not process-memory or hardware-audibility measurements.
 - `TuneError` includes `code`, `message`, `recovery`, and optional cause. Codes include invalid values/connections, ownership mismatch, disposed resources, unavailable backend, not running, activation failure and host failure. Application UI owns its subscriptions and listeners.
 - Scheduling is frame-based inside the engine: voice start/stop times are rounded to whole engine frames (`engine.currentFrame`, `engine.sampleRate`), and each adapter converts a frame to the seconds value its host expects through `Adapter.hostTime(frame, sampleRate)`. The browser adapter passes `frame / sampleRate`; the native adapter adds a quarter-frame bias because React Native Audio API truncates `time * sampleRate`. Parameter automation still uses seconds and may land one frame early on native; that is within the specified onset tolerance and is documented rather than hidden.
+- `instrument(preset, {maxVoices})` creates a polyphonic voice-allocating source: per note, each preset layer gets `oscillator → layer gain → shared envelope gain`, and all voices feed the instrument's built-in `filterHz`/`level` Params. `noteToFrequency('C4')` maps note names through equal temperament; `play(notes, {velocity, duration})` accepts a note name, `{frequencyHz}`, or a chord array.
+- The envelope schedules attack/decay to the sustain level in host-seconds; releases are computed by TuneJS interpolation (`cancelScheduledValues` at the interpolated value, then a linear ramp to zero), so no reliance on host AudioParam.value reads. Voice stealing releases the oldest live voice with a 20 ms release; when every live voice is already stealing, allocation still proceeds (bounded overshoot). `setEnvelope(patch)` affects future voices only; `stopAll()` releases every live voice.
+- `tunejs/presets` exports frozen presets (`softKeys`, `pluck`); they are pure data, no sample assets.
 
 Wave 1 hardening makes graph/voice teardown complete logical ownership cleanup even when host operations fail. Independent cleanup attempts continue, failures retain their causes in `TuneError`, and partial host-node initialization is disconnected before retry. These guarantees concern controller ownership; failed host cleanup is not proof of released device or process memory. Dispose the engine after a cleanup error.
 
-Implemented: lifecycle, graph ownership/routing, oscillator voices, gain/filter Params, explicit activation, stop/suspend/disposal and errors. Experimental only: native adapter and backend comparison fixtures. Not implemented yet: samples, softKeys/envelopes, buses, transport, spatial API/Three.js integration, analyzer/tap/recorder API, projects or WAV/offline public output. The false capability flags refer to TuneJS API support, even when a host primitive exists. The specification's v0.1 feature deferrals remain deferred.
+Implemented: lifecycle, graph ownership/routing, oscillator voices, gain/filter Params, envelope-controlled instruments with note names, polyphonic voice allocation/stealing, presets, explicit activation, stop/suspend/disposal and errors. Experimental only: native adapter and backend comparison fixtures. Not implemented yet: samples, buses, transport, spatial API/Three.js integration, analyzer/tap/recorder API, projects or WAV/offline public output; the percussion preset is still pending (it needs noise, Wave 4). The false capability flags refer to TuneJS API support, even when a host primitive exists. The specification's v0.1 feature deferrals remain deferred.
 
 ## Native example
 

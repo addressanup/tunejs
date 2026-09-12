@@ -25,10 +25,14 @@ await writeFile(join(consumer,'check.mjs'),`import assert from 'node:assert/stri
 import {Engine} from 'tunejs';
 import {browserAdapter} from 'tunejs/browser';
 import {nativeAdapter} from 'tunejs/native';
+import {softKeys} from 'tunejs/presets';
 import {firstSound} from './first-sound.js';
 const sound=firstSound(browserAdapter());
 assert.equal(sound.engine.state,'idle');
 await sound.dispose();
+const presetEngine=new Engine({adapter:browserAdapter()});
+assert.equal(presetEngine.instrument(softKeys).maxVoices,16);
+await presetEngine.dispose();
 let creates=0;
 const native=new Engine({adapter:nativeAdapter(()=>{creates++;throw new Error('Unexpected native activation');})});
 assert.equal(native.state,'idle');
@@ -40,6 +44,7 @@ execFileSync(process.execPath,['check.mjs'],{cwd:consumer,stdio:'inherit'});
 await writeFile(join(consumer,'check.ts'),`import {Engine,type Adapter} from 'tunejs';
 import {browserAdapter} from 'tunejs/browser';
 import {nativeAdapter} from 'tunejs/native';
+import {softKeys} from 'tunejs/presets';
 const native: Adapter=nativeAdapter(()=>{throw new Error('Typecheck only');});
 const idle=new Engine({adapter:native});
 async function example() {
@@ -48,6 +53,7 @@ async function example() {
   s.connect(e.filter()).connect(e.gain()).connect(e.output);
   await e.start();
   s.play().stop();
+  e.instrument(softKeys).play(['C4','E4'],{duration:{seconds:1}}).stop();
   await e.dispose();
 }
 void idle;

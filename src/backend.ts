@@ -9,6 +9,21 @@ export interface HostNode {
   connect(target: HostNode): unknown;
   disconnect(): unknown;
 }
+/** One delivered PCM block from a host tap. `channels` are consumer-owned copies. */
+export interface HostTapChunk { sequence: number; startFrame: number; channels: Float32Array[]; droppedFramesBefore: number }
+/**
+ * Host tap: emits chunks whose `startFrame` is the engine frame of the first sample. At most
+ * `inFlightChunks` unacknowledged chunks may be in flight — beyond that the host drops the chunk and
+ * adds its frames to the NEXT delivered chunk's `droppedFramesBefore`. `close()` flushes any pending
+ * drop count as a final zero-length chunk before ending.
+ */
+export interface HostTap extends HostNode {
+  onChunk(callback: ((chunk: HostTapChunk) => void) | null): void;
+  acknowledge(sequence: number): void;
+  close(): void;
+}
+/** A live capture device; `node` is the host source node, `stop()` releases the device. */
+export interface HostCapture { readonly node: HostNode; stop(): void }
 export interface HostGain extends HostNode { gain: HostParam }
 export interface HostFilter extends HostNode { type: string; frequency: HostParam; Q: HostParam }
 export interface HostBuffer {
@@ -48,6 +63,8 @@ export interface Adapter {
   readonly name: string;
   /** `fanOut: false` means the host delivers only one outgoing connection per node (measured live on React Native Audio API 0.13.3, see docs/evidence/2026-09-12/live-probes). */
   readonly hostLimits: { fanOut: boolean };
+  tapping?: { createTap(context: HostContext, options: { chunkFrames: number; inFlightChunks: number }): Promise<HostTap> };
+  capture?(context: HostContext, options: { kind: 'microphone'; signal?: AbortSignal }): Promise<HostCapture>;
   createContext(): HostContext;
   setEnded(node: HostScheduledSource, callback: (() => void) | null): void;
   /** Seconds value at which this host's own time→frame conversion lands exactly on `frame`. */

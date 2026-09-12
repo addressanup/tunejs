@@ -68,6 +68,13 @@ async function example() {
   e.instrument(softKeys).connect(emitter).connect(e.output);
   e.listener.setPose({ forward: { x: 0, y: 0, z: -1 } });
   poseFromMatrix(new Array(16).fill(0).map((_, i) => (i % 5 === 0 ? 1 : 0)));
+  const mic = await e.input({ kind: 'microphone' });
+  const rec = e.recorder({ source: mic });
+  await rec.start();
+  const take = await rec.stop();
+  take.toWav();
+  for await (const chunk of await e.tap({ source: mic })) { chunk.startFrame; break; }
+  (await e.meter({ source: mic })).read();
   await e.dispose();
 }
 void idle;

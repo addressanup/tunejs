@@ -72,6 +72,7 @@ export default function App() {
     <Button title="Start scene" onPress={() => void act(scene.start)} />
     <Button title="Stop scene" onPress={() => void act(scene.stop)} />
     <Button title="Rotate listener" onPress={() => void act(() => { yaw.current += 0.5; scene.rotateListener(yaw.current); })} />
-    <Text selectable>{status}</Text><View><Text selectable>{results}</Text></View>
+    <Text selectable>{status}</Text>
+    <Text selectable>{`capture capability: ${sound.engine.capabilities.capture}`}</Text><View><Text selectable>{results}</Text></View>
   </ScrollView>;
 }

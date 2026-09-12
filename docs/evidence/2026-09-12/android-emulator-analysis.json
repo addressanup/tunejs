@@ -1,0 +1,14 @@
+{
+  "source": "native-results-v3-android-emulator.json",
+  "host": "Android emulator AVD dosekeep_api35 (API 35, arm64-v8a), React Native 0.86.3, React Native Audio API 0.13.3, Release APK, OfflineAudioContext",
+  "appBundle": "Release APK bundled the Wave 3 TuneJS dist (built before the Wave 4 sample module was staged); the fixture pipeline does not call sample(), so the offline fixture evidence is unaffected. The iOS companion run (native-results-v3-ios-wave4.json) carries the Wave 4 dist.",
+  "scope": "emulator offline PCM reached through a domain-scoped cleartext exception for 10.0.2.2; no physical Android device, no TuneJS lifecycle, capture or audible-output check",
+  "timing": [
+    {"scheduling": "raw-seconds", "rate": 44100, "status": "fail", "arithmeticError": 0.499755859375, "maxOnsetErrorFrames": 1, "gainErrorAtActualOnset": 0},
+    {"scheduling": "raw-seconds", "rate": 48000, "status": "pass", "arithmeticError": 0, "maxOnsetErrorFrames": 0},
+    {"scheduling": "native-adapter-frames", "rate": 44100, "status": "pass", "arithmeticError": 0, "maxOnsetErrorFrames": 0},
+    {"scheduling": "native-adapter-frames", "rate": 48000, "status": "pass", "arithmeticError": 0, "maxOnsetErrorFrames": 0}
+  ],
+  "other": "filter smoke pass at both rates with 48 kHz RMS 0.18763656197487819 (identical to the iOS simulator value); stereo-pan arithmetic and mirror error 1.4901161193847656e-8 at both rates; HRTF unavailable (PannerNode/AudioListener absent) at both rates; repeatError 0 everywhere",
+  "interpretation": "The Android emulator reproduces the iOS simulator results sample-for-sample on every fixture, consistent with the shared C++ core of React Native Audio API. The raw 44.1 kHz truncation shift and its correction through nativeAdapter.hostTime are therefore not iOS-specific. Native HRTF remains unavailable on both platforms in 0.13.3. This is the first Android runtime evidence; it is not physical-device evidence."
+}

@@ -1,9 +1,12 @@
 import type { Adapter, HostContext } from './backend.js';
+import { decodeWav } from './assets.js';
 import { TuneError, finite, integerFrame } from './errors.js';
 import { Filter, Gain, GraphNode, Oscillator } from './graph.js';
 import type { OwnedVoice } from './graph.js';
 import { Instrument } from './instrument.js';
 import type { InstrumentPreset } from './instrument.js';
+import { Sample } from './sample.js';
+import type { SampleAsset, SampleEntry } from './sample.js';
 export type EngineState = 'idle' | 'starting' | 'running' | 'suspended' | 'interrupted' | 'failed' | 'disposed';
 
 export class Engine {
@@ -12,6 +15,7 @@ export class Engine {
   readonly output: GraphNode;
   /** @internal */ readonly adapter: Adapter;
   #context?: HostContext;
+  #assets = new Map<string, SampleEntry>();
   #state: EngineState = 'idle';
   #starting?: Promise<void>;
   #suspending?: Promise<void>;
@@ -28,9 +32,9 @@ export class Engine {
   get currentFrame(): number { return this.#context ? Math.round(this.#context.currentTime * this.#context.sampleRate) : 0; }
   /** @internal */ hostTimeAt(frame: number): number { return this.adapter.hostTime(integerFrame(frame, 'frame'), this.#context!.sampleRate); }
   get diagnostics() {
-    return { state: this.state, backend: this.adapter.name, sampleRate: this.#context?.sampleRate ?? null, nodes: this.nodes.size, voices: this.voices.size, cachedAssetBytes: 0, taps: 0, underruns: null, outputLatencySeconds: null };
+    return { state: this.state, backend: this.adapter.name, sampleRate: this.#context?.sampleRate ?? null, nodes: this.nodes.size, voices: this.voices.size, cachedAssetBytes: [...this.#assets.values()].reduce((bytes, entry) => bytes + entry.decoded.channels.reduce((total, channel) => total + channel.length, 0) * 4, 0), taps: 0, underruns: null, outputLatencySeconds: null };
   }
-  readonly capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, spatial: false, capture: false, projects: false, offline: false, backgroundPlayback: false });
+  readonly capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, spatial: false, capture: false, projects: false, offline: false, backgroundPlayback: false });
   /** @internal */ assertAlive(): void { if (this.#state === 'disposed') throw new TuneError('DISPOSED', 'Engine is disposed.', 'Create a new engine.'); }
   /** @internal */ runningContext(): HostContext {
     this.assertAlive();
@@ -97,6 +101,65 @@ export class Engine {
     this.assertAlive();
     return this.add(new Instrument(this, preset, options));
   }
+  async sample(asset: SampleAsset, options: { signal?: AbortSignal } = {}): Promise<Sample> {
+    this.assertAlive();
+    if (typeof asset !== 'object' || asset === null || typeof asset.id !== 'string' || !asset.id) {
+      throw new TuneError('INVALID_VALUE', 'sample() requires an asset with a nonempty id.', 'Pass { id, bytes } or { id, url }.');
+    }
+    if ((asset.bytes === undefined) === (asset.url === undefined)) {
+      throw new TuneError('INVALID_VALUE', 'An asset needs exactly one of bytes or url.', 'Provide WAV bytes or a URL, not both.');
+    }
+    const signal = options.signal;
+    const cancelled = () => new TuneError('CANCELLED', `Loading sample '${asset.id}' was cancelled.`, 'Retry with a signal that has not aborted.');
+    if (signal?.aborted) throw cancelled();
+    let entry = this.#assets.get(asset.id);
+    if (!entry) {
+      const check = () => { this.assertAlive(); if (signal?.aborted) throw cancelled(); };
+      let bytes = asset.bytes;
+      if (bytes === undefined) {
+        if (typeof globalThis.fetch !== 'function') throw new TuneError('UNSUPPORTED', 'This host cannot fetch URL assets.', 'Pass decoded WAV bytes instead.');
+        let response;
+        try { response = await globalThis.fetch(asset.url!, { signal }); }
+        catch (cause) {
+          if (signal?.aborted) throw cancelled();
+          throw new TuneError('ASSET_FAILED', `Fetching sample '${asset.id}' failed.`, 'Check the URL and network.', { cause });
+        }
+        check();
+        if (!response.ok) throw new TuneError('ASSET_FAILED', `Fetching sample '${asset.id}' returned HTTP ${response.status}.`, 'Check the URL and asset deployment.');
+        try { bytes = await response.arrayBuffer(); }
+        catch (cause) {
+          if (signal?.aborted) throw cancelled();
+          throw new TuneError('ASSET_FAILED', `Reading sample '${asset.id}' failed.`, 'Check the URL and network.', { cause });
+        }
+        check();
+      }
+      let decoded;
+      try { decoded = decodeWav(bytes); }
+      catch (cause) {
+        if (cause instanceof TuneError) throw new TuneError('ASSET_FAILED', `Sample '${asset.id}': ${cause.message}`, 'Provide an intact PCM WAV file.', { cause });
+        throw cause;
+      }
+      check();
+      if (!decoded.frames) throw new TuneError('ASSET_FAILED', `Sample '${asset.id}' decoded to zero frames.`, 'Provide a nonempty PCM WAV file.');
+      const existing = this.#assets.get(asset.id);
+      if (existing) entry = existing;
+      else {
+        entry = { id: asset.id, decoded, refs: new Set(), hostBuffers: new Map() };
+        this.#assets.set(asset.id, entry);
+      }
+    }
+    return this.add(new Sample(this, entry));
+  }
+  clearAssets(): number {
+    let released = 0;
+    for (const [id, entry] of this.#assets) {
+      if (!entry.refs.size) {
+        released += entry.decoded.channels.reduce((total, channel) => total + channel.length, 0) * 4;
+        this.#assets.delete(id);
+      }
+    }
+    return released;
+  }
   private add<T extends GraphNode>(node: T): T {
     try { this.materialize(node); }
     catch (cause) { throw new TuneError('HOST_FAILURE', 'The host could not prepare the graph object.', 'Dispose the engine if host cleanup failed, then retry with a new engine.', { cause }); }
@@ -113,6 +176,7 @@ export class Engine {
       const errors: unknown[] = [];
       for (const voice of [...this.voices]) try { voice.dispose(); } catch (error) { errors.push(error); }
       for (const node of [...this.nodes]) try { node.dispose(); } catch (error) { errors.push(error); }
+      this.#assets.clear();
       try { await this.#context?.close(); } catch (error) { errors.push(error); }
       if (errors.length) throw new TuneError('HOST_FAILURE', 'Host cleanup failed.', 'Inspect the cause; the engine cannot be reused.', { cause: new AggregateError(errors) });
     })();

@@ -8,6 +8,8 @@ export { Kit } from './kit.js';
 export type { KitPreset, HitPreset } from './kit.js';
 export { Transport, Pattern, Part } from './transport.js';
 export type { Beats, PatternEvent, PatternData, TempoAck } from './transport.js';
+export { Listener, SpatialSource, stereoRender } from './spatial.js';
+export type { Vec3, Pose, DistanceModel, Cone, SpatialSourceOptions, StereoRenderResult } from './spatial.js';
 export { Sample, SampleVoice } from './sample.js';
 export type { SampleAsset } from './sample.js';
 export { Bus, Pan, Delay, Reverb, syntheticReverbResponse } from './mixing.js';

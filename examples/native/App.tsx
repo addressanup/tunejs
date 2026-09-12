@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppState, Button, Platform, ScrollView, Text, View } from 'react-native';
 import { AudioContext, OfflineAudioContext } from 'react-native-audio-api';
 import { nativeAdapter } from 'tunejs/native';
 import { firstSound } from './generated/first-sound';
 import { livingLoop } from './generated/living-loop';
+import { spatialPlayground } from './generated/spatial-playground';
 import { runFixtures } from './generated/fixtures';
 import { runLiveProbes } from './generated/live-probes';
 
@@ -11,7 +12,9 @@ export default function App() {
   const adapter = nativeAdapter(() => new AudioContext());
   const [sound] = useState(() => firstSound(adapter));
   const [loop] = useState(() => livingLoop(adapter));
+  const [scene] = useState(() => spatialPlayground(adapter));
   const [status, setStatus] = useState('Idle — tap Play to activate audio');
+  const yaw = useRef(0);
   const [results, setResults] = useState('Offline fixtures running');
   const act = async (action: () => unknown) => { try { await action(); setStatus(JSON.stringify(sound.engine.diagnostics)); } catch(error) { setStatus(String(error)); } };
   useEffect(() => {
@@ -47,7 +50,7 @@ export default function App() {
         if (!posted) throw lastError;
       } catch(error) { if(alive) setResults(String(error)); }
     })();
-    return () => { alive=false; subscription.remove(); void loop.dispose().catch(console.error); void sound.dispose().catch(console.error); };
+    return () => { alive=false; subscription.remove(); void scene.dispose().catch(console.error); void loop.dispose().catch(console.error); void sound.dispose().catch(console.error); };
   }, [sound]);
   return <ScrollView contentContainerStyle={{padding:28,paddingTop:70,gap:16}}>
     <Text style={{fontSize:36,fontWeight:'600'}}>TuneJS · First sound</Text>
@@ -65,6 +68,10 @@ export default function App() {
     <Button title="Stop loop" onPress={() => void act(loop.stop)} />
     <Button title="Replace phrase" onPress={() => void act(() => loop.replacePhrase())} />
     <Button title="Tempo 124" onPress={() => void act(() => loop.setTempo(124))} />
+    <Text style={{fontSize:18,fontWeight:'600'}}>Spatial playground</Text>
+    <Button title="Start scene" onPress={() => void act(scene.start)} />
+    <Button title="Stop scene" onPress={() => void act(scene.stop)} />
+    <Button title="Rotate listener" onPress={() => void act(() => { yaw.current += 0.5; scene.rotateListener(yaw.current); })} />
     <Text selectable>{status}</Text><View><Text selectable>{results}</Text></View>
   </ScrollView>;
 }

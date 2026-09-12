@@ -46,6 +46,7 @@ await writeFile(join(consumer,'check.ts'),`import {Engine,type Adapter} from 'tu
 import {browserAdapter} from 'tunejs/browser';
 import {nativeAdapter} from 'tunejs/native';
 import {softKeys,softDrums} from 'tunejs/presets';
+import {poseFromMatrix} from 'tunejs/three';
 const native: Adapter=nativeAdapter(()=>{throw new Error('Typecheck only');});
 const idle=new Engine({adapter:native});
 async function example() {
@@ -63,6 +64,10 @@ async function example() {
   e.transport.bpm.set(100);
   part.replace(e.pattern({ length: { beats: 2 }, events: [] }), { boundary: 'next-bar' });
   part.cancel();
+  const emitter = await e.spatialSource({ rendering: 'stereo', position: { x: 1, y: 0, z: -1 } });
+  e.instrument(softKeys).connect(emitter).connect(e.output);
+  e.listener.setPose({ forward: { x: 0, y: 0, z: -1 } });
+  poseFromMatrix(new Array(16).fill(0).map((_, i) => (i % 5 === 0 ? 1 : 0)));
   await e.dispose();
 }
 void idle;

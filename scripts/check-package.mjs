@@ -21,6 +21,8 @@ const pack=JSON.parse(execFileSync(npm,['pack','--json','--ignore-scripts','--pa
 await writeFile(join(consumer,'package.json'),JSON.stringify({private:true,type:'module',dependencies:{tunejs:`file:../${pack.filename}`}}));
 execFileSync(npm,['install','--ignore-scripts','--no-audit','--no-fund'],{cwd:consumer,stdio:'inherit'});
 await cp(join(root,'examples/shared/first-sound.js'),join(consumer,'first-sound.js'));
+await cp(join(root,'experiments/workload.js'),join(consumer,'workload.js'));
+await cp(join(root,'experiments/workload-wav.js'),join(consumer,'workload-wav.js'));
 await writeFile(join(consumer,'check.mjs'),`import assert from 'node:assert/strict';
 import {Engine} from 'tunejs';
 import {browserAdapter} from 'tunejs/browser';

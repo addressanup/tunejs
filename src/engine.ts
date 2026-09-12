@@ -7,7 +7,10 @@ import { Instrument } from './instrument.js';
 import type { InstrumentPreset } from './instrument.js';
 import { Sample } from './sample.js';
 import type { SampleAsset, SampleEntry } from './sample.js';
-import { Bus, Delay, Pan, Reverb } from './mixing.js';
+import { Bus, Delay, Pan, Reverb, mulberry32 } from './mixing.js';
+import { Kit } from './kit.js';
+import type { KitPreset } from './kit.js';
+import type { HostBuffer, HostGain } from './backend.js';
 export type EngineState = 'idle' | 'starting' | 'running' | 'suspended' | 'interrupted' | 'failed' | 'disposed';
 
 export class Engine {
@@ -16,6 +19,8 @@ export class Engine {
   readonly output: GraphNode;
   /** @internal */ readonly adapter: Adapter;
   #context?: HostContext;
+  #master?: HostGain;
+  #noiseBuffers = new Map<number, HostBuffer>();
   #assets = new Map<string, SampleEntry>();
   #state: EngineState = 'idle';
   #starting?: Promise<void>;
@@ -35,7 +40,7 @@ export class Engine {
   get diagnostics() {
     return { state: this.state, backend: this.adapter.name, sampleRate: this.#context?.sampleRate ?? null, nodes: this.nodes.size, voices: this.voices.size, cachedAssetBytes: [...this.#assets.values()].reduce((bytes, entry) => bytes + entry.decoded.channels.reduce((total, channel) => total + channel.length, 0) * 4, 0), taps: 0, underruns: null, outputLatencySeconds: null };
   }
-  readonly capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, spatial: false, capture: false, projects: false, offline: false, backgroundPlayback: false });
+  readonly capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, kits: true, spatial: false, capture: false, projects: false, offline: false, backgroundPlayback: false });
   /** @internal */ assertAlive(): void { if (this.#state === 'disposed') throw new TuneError('DISPOSED', 'Engine is disposed.', 'Create a new engine.'); }
   /** @internal */ runningContext(): HostContext {
     this.assertAlive();
@@ -52,7 +57,15 @@ export class Engine {
       if (!this.#context) {
         this.#context = this.adapter.createContext();
       }
-      this.output.host = this.#context.destination;
+      // A TuneJS-owned master gain fans everything into a single destination edge — the native
+      // destination silently drops fan-in edges (see docs/backend-decision.md).
+      if (!this.#master) {
+        const master = this.#context.createGain();
+        master.gain.setValueAtTime(1, this.#context.currentTime);
+        master.connect(this.#context.destination);
+        this.#master = master;
+      }
+      this.output.host = this.#master;
       for (const node of this.nodes) this.materialize(node);
       for (const node of this.nodes) if (node !== this.output) node.reconnect();
       // Must be invoked synchronously in the caller's gesture, before any await.
@@ -101,6 +114,24 @@ export class Engine {
   instrument(preset: InstrumentPreset, options: { maxVoices?: number } = {}): Instrument {
     this.assertAlive();
     return this.add(new Instrument(this, preset, options));
+  }
+  kit(preset: KitPreset, options: { maxVoices?: number } = {}): Kit {
+    this.assertAlive();
+    return this.add(new Kit(this, preset, options));
+  }
+  /** @internal */ noiseBuffer(context: HostContext): HostBuffer {
+    const rate = context.sampleRate;
+    let buffer = this.#noiseBuffers.get(rate);
+    if (!buffer) {
+      const frames = 2 * rate;
+      const data = new Float32Array(frames);
+      const random = mulberry32(0x4E4F4953);
+      for (let i = 0; i < frames; i++) data[i] = random() * 2 - 1;
+      buffer = context.createBuffer(1, frames, rate);
+      buffer.copyToChannel(data, 0);
+      this.#noiseBuffers.set(rate, buffer);
+    }
+    return buffer;
   }
   async sample(asset: SampleAsset, options: { signal?: AbortSignal } = {}): Promise<Sample> {
     this.assertAlive();
@@ -189,11 +220,17 @@ export class Engine {
   dispose(): Promise<void> {
     if (this.#disposing) return this.#disposing;
     this.#state = 'disposed';
+    // The engine owns the master gain's disconnect, not output.dispose() — keep it single.
+    const master = this.#master;
+    this.#master = undefined;
+    this.output.host = undefined;
     this.#disposing = (async () => {
       const errors: unknown[] = [];
       for (const voice of [...this.voices]) try { voice.dispose(); } catch (error) { errors.push(error); }
       for (const node of [...this.nodes]) try { node.dispose(); } catch (error) { errors.push(error); }
       this.#assets.clear();
+      this.#noiseBuffers.clear();
+      try { master?.disconnect(); } catch (error) { errors.push(error); }
       try { await this.#context?.close(); } catch (error) { errors.push(error); }
       if (errors.length) throw new TuneError('HOST_FAILURE', 'Host cleanup failed.', 'Inspect the cause; the engine cannot be reused.', { cause: new AggregateError(errors) });
     })();

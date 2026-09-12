@@ -32,7 +32,7 @@ test('bus maps dB onto a linear host gain and reads ramps back in dB',async()=>{
   bus.connect(e.output);plain.connect(e.output);
   await e.start();
   assert.deepEqual(bus.gainDb.value,-6);
-  const busGain=h.gains[0],plainGain=h.gains[1];
+  const busGain=h.gains[1],plainGain=h.gains[2]; // gains[0] is the engine master gain
   assert.deepEqual(busGain.events,[['set',10**(-6/20),0]]);
   assert.deepEqual(plainGain.events,[['set',1,0]]);
   bus.gainDb.rampTo(-12,{seconds:1});
@@ -56,7 +56,7 @@ test('pan binds an equal-power host panner and rejects out-of-range values',asyn
   assert.equal(h.panners.length,2);
   assert.deepEqual(h.panners[0].events,[['set',-0.75,0]]);
   assert.deepEqual(h.panners[1].events,[['set',0,0]]);
-  assert.equal(h.gains.length,1,'only the oscillator unity gain');
+  assert.equal(h.gains.length,2,'master + oscillator unity gain');
   await e.dispose();
 });
 
@@ -79,8 +79,8 @@ test('delay builds a finite feedforward tap chain with unity dry and a bound wet
   assert.deepEqual(tapGains.map(g=>g.events[0][1]),[0.5,0.25,0.125]);
   const wet=h.gains.find(g=>g.events[0]&&g.events[0][1]===0.3);
   assert.ok(wet,'wet gain bound to mix');
-  assert.equal(h.gains.length,3+3+1); // input, out, wet + 3 tap gains + oscillator unity gain
-  const inputGain=h.gains[0];
+  assert.equal(h.gains.length,3+3+2); // input, out, wet + 3 tap gains + oscillator unity gain + master
+  const inputGain=h.gains[1]; // gains[0] is the engine master gain
   assert.ok(source.host.connections.includes(delay.input),'source lands on the effect input');
   assert.equal(delay.input,inputGain);
   delay.mix.rampTo(1,{seconds:0.1});
@@ -121,7 +121,7 @@ test('effect chains route, dispose internal host nodes once, and leave no leaks 
   source.connect(delay).connect(reverb).connect(pan).connect(bus).connect(e.output);
   await e.start();
   assert.ok(source.host.connections.includes(delay.input));
-  const delayNodes=[...h.delays,...h.gains.slice(1,1+3+2)]; // taps delays + input/out/wet/tap gains
+  const delayNodes=[...h.delays,...h.gains.slice(2,2+3+2)]; // taps delays + input/out/wet/tap gains (gains 0/1 = master + oscillator unity)
   const before=new Map(delayNodes.map(node=>[node,node.disconnects]));
   const disconnectsBefore=source.host.disconnects;
   delay.dispose();
@@ -145,7 +145,7 @@ test('host failure inside an effect cleans partial nodes and start can retry',as
   const original=h.context.createConvolver;
   h.context.createConvolver=()=>{throw new Error('no convolver');};
   await assert.rejects(e.start(),code('ACTIVATION_FAILED'));
-  for(const g of created) assert.equal(g.disconnects,1,'partially created gains disconnected');
+  for(const g of created.slice(1)) assert.equal(g.disconnects,1,'partially created gains disconnected'); // created[0] is the master gain, which survives a failed start
   h.context.createConvolver=original;
   await e.start();assert.equal(e.state,'running');
   await e.dispose();
@@ -154,7 +154,7 @@ test('host failure inside an effect cleans partial nodes and start can retry',as
   const createDelay=h2.context.createDelay;let calls=0;
   h2.context.createDelay=(...a)=>{calls++;if(calls===2)throw new Error('second delay fails');return createDelay(...a);};
   await assert.rejects(e2.start(),code('ACTIVATION_FAILED'));
-  for(const node of [...h2.gains.slice(1),...h2.delays]) assert.equal(node.disconnects,1);
+  for(const node of [...h2.gains.slice(2),...h2.delays]) assert.equal(node.disconnects,1); // gains 0/1 = master + oscillator unity survive
   h2.context.createDelay=createDelay;
   await e2.start();assert.equal(e2.state,'running');
   await e2.dispose();

@@ -7,7 +7,7 @@ const close=(a,b)=>Math.abs(a-b)<=1e-9;
 
 // Per-node event capture: each created node's `events` records its own param calls; `disconnects`
 // counts host disconnect calls. Creation order is fixed by Instrument/SynthVoice: level gain is
-// gains[0], the preset filter is filters[0], then each note voice appends env gain + 3 layer gains
+// gains[0] is the engine master gain, gains[1] the instrument level gain, the preset filter is filters[0], then each note voice appends env gain + 3 layer gains
 // and 3 oscillators (softKeys has 3 layers).
 function host() {
   const hostCalls=[],gains=[],oscs=[],filters=[];
@@ -60,11 +60,11 @@ test('chord allocation builds per-layer voices on adapter frame times',async()=>
   h.context.currentTime=0.5;
   const chord=keys.play(['C4','E4','G4']);
   assert.equal(h.oscs.length,9);
-  assert.equal(h.gains.length,1+3*4);
+  assert.equal(h.gains.length,2+3*4);
   assert.equal(h.filters.length,1);
   for(const osc of h.oscs) assert.ok(close(osc.starts[0],24000/48000),`start ${osc.starts[0]}`);
   assert.ok(h.hostCalls.filter(call=>call[0]===24000&&call[1]===48000).length>=3);
-  for(const k of [0,1,2]) assertEvents(h.gains[1+k*4].events,[['set',0,0.5],['ramp',0.8,0.512],['ramp',0.44,0.862]]);
+  for(const k of [0,1,2]) assertEvents(h.gains[2+k*4].events,[['set',0,0.5],['ramp',0.8,0.512],['ramp',0.44,0.862]]);
   assert.equal(keys.activeVoices,3);
   assert.equal(e.diagnostics.voices,3);
   assert.equal(chord.state,'playing');
@@ -80,16 +80,16 @@ test('scheduled duration ends with the envelope release and host-frame stops',as
   const h=host(),e=h.engine;const keys=e.instrument(softKeys);keys.connect(e.output);await e.start();
   h.context.currentTime=0.5;
   keys.play('A4',{duration:{seconds:2}});
-  const env=h.gains[1];
+  const env=h.gains[2];
   assertEvents(env.events.slice(-2),[['set',0.44,2.5],['ramp',0,2.9]]);
   const stopSeconds=(Math.round(2.9*48000)+1)/48000;
   for(const osc of h.oscs) assert.ok(close(osc.stops[0],stopSeconds),`stop ${osc.stops[0]}`);
   keys.play('A4',{duration:{seconds:0.006}});
-  assertEvents(h.gains[5].events,[['set',0,0.5],['ramp',0.4,0.506],['ramp',0,0.906]]);
-  assert.ok(!h.gains[5].events.some(e=>e[1]===0.8));
+  assertEvents(h.gains[6].events,[['set',0,0.5],['ramp',0.4,0.506],['ramp',0,0.906]]);
+  assert.ok(!h.gains[6].events.some(e=>e[1]===0.8));
   keys.play('A4',{duration:{seconds:0.2}});
   const expected=0.8+(0.44-0.8)*((0.7-0.512)/0.35);
-  assertEvents(h.gains[9].events,[['set',0,0.5],['ramp',0.8,0.512],['ramp',expected,0.7],['ramp',0,1.1]]);
+  assertEvents(h.gains[10].events,[['set',0,0.5],['ramp',0.8,0.512],['ramp',expected,0.7],['ramp',0,1.1]]);
   await e.dispose();
 });
 
@@ -97,7 +97,7 @@ test('live release mid-attack cancels to the interpolated value',async()=>{
   const h=host(),e=h.engine;const keys=e.instrument(softKeys);keys.connect(e.output);await e.start();
   h.context.currentTime=0.5;
   const chord=keys.play('A4');
-  const env=h.gains[1];
+  const env=h.gains[2];
   h.context.currentTime=0.506;
   chord.stop();
   assert.equal(chord.state,'stopping');
@@ -108,7 +108,7 @@ test('live release mid-attack cancels to the interpolated value',async()=>{
   assert.equal(chord.state,'ended');
   assert.equal(keys.activeVoices,0);
   assert.equal(e.voices.size,0);
-  for(const node of [...h.oscs,...h.gains.slice(1,5)]) assert.equal(node.disconnects,1);
+  for(const node of [...h.oscs,...h.gains.slice(2,6)]) assert.equal(node.disconnects,1);
   const length=env.events.length;
   chord.stop();
   assert.equal(env.events.length,length);
@@ -119,7 +119,7 @@ test('voice stealing releases the oldest live voice and tolerates full-overshoot
   const h=host(),e=h.engine;const keys=e.instrument(softKeys,{maxVoices:2});keys.connect(e.output);await e.start();
   h.context.currentTime=0.5;
   keys.play('C4');keys.play('E4');keys.play('G4');
-  const c4env=h.gains[1];
+  const c4env=h.gains[2];
   assertEvents(c4env.events.slice(-3),[['cancel',0.5],['set',0,0.5],['ramp',0,0.52]]);
   assert.equal(keys.activeVoices,3);
   h.oscs[0].onEnded();
@@ -145,8 +145,8 @@ test('setEnvelope validates and affects only voices played afterwards',async()=>
   h.context.currentTime=0.6;
   before.stop();after.stop();
   const atStop=0.8+(0.44-0.8)*((0.6-0.512)/0.35);
-  assertEvents(h.gains[1].events.slice(-3),[['cancel',0.6],['set',atStop,0.6],['ramp',0,1]]);
-  assertEvents(h.gains[5].events.slice(-3),[['cancel',0.6],['set',atStop,0.6],['ramp',0,1.6]]);
+  assertEvents(h.gains[2].events.slice(-3),[['cancel',0.6],['set',atStop,0.6],['ramp',0,1]]);
+  assertEvents(h.gains[6].events.slice(-3),[['cancel',0.6],['set',atStop,0.6],['ramp',0,1.6]]);
   assert.throws(()=>keys.setEnvelope({release:0}),code('INVALID_VALUE'));
   await e.dispose();
 });
@@ -159,7 +159,7 @@ test('host failure during chord allocation releases this call\'s voices',async()
   assert.throws(()=>keys.play(['C4','E4']),code('HOST_FAILURE'));
   assert.equal(keys.activeVoices,0);
   assert.equal(e.voices.size,0);
-  for(const node of [...h.oscs,...h.gains.slice(1)]) assert.equal(node.disconnects,1);
+  for(const node of [...h.oscs,...h.gains.slice(2)]) assert.equal(node.disconnects,1);
   await e.dispose();
 });
 
@@ -171,7 +171,7 @@ test('instrument dispose ends live voices, drops the host chain and rejects furt
   keys.dispose();
   assert.equal(keys.activeVoices,0);
   assert.equal(e.voices.size,0);
-  for(const node of [...h.oscs,...h.gains.slice(1)]) assert.equal(node.disconnects,1);
+  for(const node of [...h.oscs,...h.gains.slice(2)]) assert.equal(node.disconnects,1);
   assert.equal(filter.disconnects,1);
   assert.equal(keys.input,undefined);
   assert.equal(e.nodes.has(keys),false);

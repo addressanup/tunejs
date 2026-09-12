@@ -5,7 +5,7 @@ import {BoundedChunks} from '../experiments/capture.js';
 function host() {
   const events=[];
   const param=()=>({value:1,setValueAtTime(v,t){events.push(['set',v,t]);},linearRampToValueAtTime(v,t){events.push(['ramp',v,t]);},cancelScheduledValues(t){events.push(['cancel',t]);}});
-  const node=()=>({connect(){},disconnect(){}});
+  const node=()=>({connections:[],disconnects:0,connect(t){this.connections.push(t);},disconnect(){this.disconnects++;}});
   const context={state:'suspended',sampleRate:48000,currentTime:0,destination:node(),createGain:()=>({...node(),gain:param()}),createBiquadFilter:()=>({...node(),type:'lowpass',frequency:param(),Q:param()}),createOscillator:()=>({...node(),frequency:param(),type:'sine',start(){},stop(){}}),async resume(){this.state='running';},async suspend(){this.state='suspended';},async close(){this.state='closed';}};
   let creates=0;
   const adapter={name:'unit-test-double',createContext(){creates++;return context;},setEnded(node,fn){node.onEnded=fn;},hostTime(frame,rate){events.push(['hostTime',frame,rate]);return frame/rate;}};
@@ -173,4 +173,28 @@ test('adapter hostTime failure during play surfaces HOST_FAILURE and releases th
  assert.throws(()=>s.play(),code('HOST_FAILURE'));
  assert.equal(e.voices.size,0);assert.equal(disconnects,1);
  e.adapter.hostTime=hostTime;await e.dispose();
+});
+test('start wires sources through a TuneJS-owned master gain into the destination',async()=>{
+ const h=host(),e=h.engine;const s1=e.oscillator(),s2=e.oscillator();s1.connect(e.output);s2.connect(e.output);await e.start();
+ const master=e.output.host;
+ assert.notEqual(master,h.context.destination);
+ assert.deepEqual(master.connections,[h.context.destination]);
+ assert.deepEqual(h.events.find(e=>e[0]==='set'),['set',1,0]);
+ const s1host=s1.host.connections,s2host=s2.host.connections;
+ assert.ok(s1host.includes(master)&&s2host.includes(master));
+ assert.equal(master.connections.length,1);
+ await e.dispose();
+});
+test('master gain creation failure rejects ACTIVATION_FAILED and a retry succeeds',async()=>{
+ const h=host(),e=h.engine;const create=h.context.createGain;let once=false;
+ h.context.createGain=()=>{if(!once){once=true;throw new Error('boom');}return create();};
+ await assert.rejects(e.start(),code('ACTIVATION_FAILED'));
+ assert.equal(e.output.host,undefined);
+ await e.start();assert.ok(e.output.host);assert.deepEqual(e.output.host.connections,[h.context.destination]);
+ await e.dispose();
+});
+test('dispose disconnects the master gain once and closes the context',async()=>{
+ const h=host(),e=h.engine;const s=e.oscillator();s.connect(e.output);await e.start();
+ const master=e.output.host;await e.dispose();
+ assert.equal(master.disconnects,1);assert.equal(h.context.state,'closed');
 });

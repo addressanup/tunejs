@@ -1,0 +1,229 @@
+{
+  "date": "2026-09-06T04:20:38.557Z",
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+  "fixtureVersion": 1,
+  "results": [
+    {
+      "kind": "timing",
+      "rate": 44100,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.0070469798291595215,
+          "peak": 0.5,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.0070469798291595215,
+          "peak": 0.5,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 0,
+      "mirrorError": null,
+      "renderMs": 9.600000023841858,
+      "scope": "arithmetic fixture"
+    },
+    {
+      "kind": "filter",
+      "rate": 44100,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.18762999237552655,
+          "peak": 0.2684231698513031,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.18762999237552655,
+          "peak": 0.2684231698513031,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": null,
+      "mirrorError": null,
+      "renderMs": 0.699999988079071,
+      "scope": "finite/repeatable smoke; NOT cross-backend reference acceptance"
+    },
+    {
+      "kind": "pan",
+      "rate": 44100,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.17337998073767705,
+          "peak": 0.2451961189508438,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.034487422330508354,
+          "peak": 0.04877253994345665,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 0,
+      "mirrorError": 0,
+      "renderMs": 0.5999999940395355,
+      "scope": "arithmetic fixture"
+    },
+    {
+      "kind": "hrtf",
+      "rate": 44100,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.16025116328897743,
+          "peak": 0.27655836939811707,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.11800628126723832,
+          "peak": 0.19526663422584534,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": null,
+      "mirrorError": null,
+      "renderMs": 126.19999998807907,
+      "scope": "finite/nonzero/repeated fixed pose only; NOT localization/reference acceptance"
+    },
+    {
+      "kind": "timing",
+      "rate": 48000,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.0067546321757505,
+          "peak": 0.5,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.0067546321757505,
+          "peak": 0.5,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 0,
+      "mirrorError": null,
+      "renderMs": 0.30000001192092896,
+      "scope": "arithmetic fixture"
+    },
+    {
+      "kind": "filter",
+      "rate": 48000,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.18763673100375103,
+          "peak": 0.26849472522735596,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.18763673100375103,
+          "peak": 0.26849472522735596,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": null,
+      "mirrorError": null,
+      "renderMs": 0.5,
+      "scope": "finite/repeatable smoke; NOT cross-backend reference acceptance"
+    },
+    {
+      "kind": "pan",
+      "rate": 48000,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.17337998012984826,
+          "peak": 0.24519631266593933,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.03448742245844647,
+          "peak": 0.04877258092164993,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 0,
+      "mirrorError": 0,
+      "renderMs": 0.5,
+      "scope": "arithmetic fixture"
+    },
+    {
+      "kind": "hrtf",
+      "rate": 48000,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.17411899238550768,
+          "peak": 0.300288587808609,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.12721997705975896,
+          "peak": 0.21141651272773743,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": null,
+      "mirrorError": null,
+      "renderMs": 134.09999999403954,
+      "scope": "finite/nonzero/repeated fixed pose only; NOT localization/reference acceptance"
+    }
+  ],
+  "naturalEnd": {
+    "state": "ended",
+    "voices": 0
+  },
+  "lifecycle": {
+    "cycles": 100,
+    "resumeCycles": 20,
+    "diagnostics": {
+      "state": "disposed",
+      "backend": "web-audio",
+      "sampleRate": 48000,
+      "nodes": 0,
+      "voices": 0,
+      "cachedAssetBytes": 0,
+      "taps": 0,
+      "underruns": null,
+      "outputLatencySeconds": null
+    }
+  },
+  "wallMs": 1273.5,
+  "capture": {
+    "status": "pass",
+    "frames": 480000,
+    "chunks": 469,
+    "gaps": 0,
+    "gapDetails": [],
+    "queuedPeak": 4096,
+    "forcedSlowConsumerDropped": 476160,
+    "scope": "synthetic AudioWorklet PCM; no physical microphone, no live TuneJS tap API"
+  }
+}

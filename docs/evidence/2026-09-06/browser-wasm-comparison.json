@@ -1,0 +1,52 @@
+{
+  "wasm": {
+    "scope": "same PCM fixtures: browser built-ins, C++ macOS executable, C++ WASM loaded in browser; no audio-device or worklet DSP claim",
+    "moduleBytes": 1416,
+    "results": [
+      {
+        "kind": "timing",
+        "rate": 44100,
+        "browserWasmError": 0,
+        "nativeWasmError": 0,
+        "status": "pass"
+      },
+      {
+        "kind": "filter",
+        "rate": 44100,
+        "browserWasmError": 0,
+        "nativeWasmError": 0,
+        "status": "pass"
+      },
+      {
+        "kind": "pan",
+        "rate": 44100,
+        "browserWasmError": 0,
+        "nativeWasmError": 0,
+        "status": "pass"
+      },
+      {
+        "kind": "timing",
+        "rate": 48000,
+        "browserWasmError": 0,
+        "nativeWasmError": 0,
+        "status": "pass"
+      },
+      {
+        "kind": "filter",
+        "rate": 48000,
+        "browserWasmError": 0,
+        "nativeWasmError": 0,
+        "status": "pass"
+      },
+      {
+        "kind": "pan",
+        "rate": 48000,
+        "browserWasmError": 0,
+        "nativeWasmError": 0,
+        "status": "pass"
+      }
+    ]
+  },
+  "date": "2026-09-06T04:35:06.576055+00:00",
+  "userAgent": "Chromium 152 (Codex in-app browser)"
+}

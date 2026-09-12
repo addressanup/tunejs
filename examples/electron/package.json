@@ -1,0 +1,1 @@
+{"name":"tunejs-electron-example","version":"0.0.1","private":true,"type":"module","main":"main.mjs","scripts":{"start":"electron ."},"devDependencies":{"electron":"44.2.0"}}

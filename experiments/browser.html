@@ -1,0 +1,31 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>TuneJS experiments</title>
+<script type="importmap">{"imports":{"tunejs":"/dist/index.js","tunejs/browser":"/dist/adapters/browser.js"}}</script>
+<style>body{font:16px/1.5 system-ui;margin:40px;max-width:1000px}pre{white-space:pre-wrap}button{padding:12px;font:inherit}</style>
+<h1>Backend feasibility fixtures</h1><p>Measures rendered PCM and software lifecycle. No device latency or listening claims.</p>
+<button id="run">Run offline and lifecycle fixtures</button> <button id="capture">Run 10-second synthetic capture</button><button id="wasm">Compare browser / C++ / WASM</button><pre id="result">Ready</pre>
+<script type="module">
+import {runFixtures} from './fixtures.js';
+import {compareWasm} from './compare-wasm.js';
+import {captureFixture} from './capture.js';
+import {Engine} from 'tunejs';
+import {browserAdapter} from 'tunejs/browser';
+const result=document.querySelector('#result'); let report={};
+async function save() { result.textContent=JSON.stringify(report,null,2); await fetch('/results/browser',{method:'POST',body:JSON.stringify(report,null,2)}); }
+document.querySelector('#run').onclick=async()=>{
+ result.textContent='Running';
+ try {
+ const started=performance.now();
+ report={date:new Date().toISOString(),userAgent:navigator.userAgent,...await runFixtures(o=>new OfflineAudioContext(o))};
+ const e=new Engine({adapter:browserAdapter()}); const source=e.oscillator(); const gain=e.gain({gain:0}); source.connect(gain).connect(e.output);
+ await e.start();
+ for(let i=0;i<100;i++) { const voice=source.play(); voice.dispose(); }
+ for(let i=0;i<20;i++) { await e.suspend(); await e.start(); }
+ const ended=source.play({duration:{seconds:0.01}}); await new Promise(r=>setTimeout(r,100));
+ report.naturalEnd={state:ended.state,voices:e.diagnostics.voices};
+ await e.dispose(); report.lifecycle={cycles:100,resumeCycles:20,diagnostics:e.diagnostics}; report.wallMs=performance.now()-started;
+ await save();
+ }catch(error){result.textContent=String(error);}
+};
+document.querySelector('#capture').onclick=async()=>{result.textContent='Capturing synthetic PCM for 10 seconds';try{report.capture=await captureFixture();await save();}catch(error){result.textContent=String(error);}};
+document.querySelector('#wasm').onclick=async()=>{result.textContent='Comparing PCM';try{report.wasm=await compareWasm();await save();}catch(error){result.textContent=String(error);}};
+</script></html>

@@ -1,0 +1,18 @@
+{
+  "analysis": [
+    {
+      "rate": 44100,
+      "maxOnsetErrorFrames": 1,
+      "gainErrorAtActualOnset": 0.0,
+      "originalFixtureStatus": "fail"
+    },
+    {
+      "rate": 48000,
+      "maxOnsetErrorFrames": 0,
+      "gainErrorAtActualOnset": 0.0,
+      "originalFixtureStatus": "pass"
+    }
+  ],
+  "sourceFinding": "RN AudioUtils.h timeToSampleFrame uses static_cast<size_t>(time * sampleRate). At frame 1023 and 44100 Hz the floating product is 1022.9999999999999.",
+  "interpretation": "The one-frame shift meets the spec onset target (<=1 sample), but fails this stricter exact-buffer fixture. Do not relabel the raw failed test or infer a complete timing pass."
+}

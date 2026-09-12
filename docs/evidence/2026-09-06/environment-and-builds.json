@@ -1,0 +1,68 @@
+{
+  "date": "2026-09-06",
+  "machine": {
+    "model": "Mac15,10",
+    "cpu": "Apple M3 Max",
+    "memoryGiB": 36,
+    "macOS": "26.5.2 (25F84)"
+  },
+  "toolchains": {
+    "node": "24.19.0",
+    "npm": "11.17.0",
+    "typescript": "6.0.3",
+    "xcode": "26.6 (17F113)",
+    "cocoapods": "1.16.2",
+    "java": "Android Studio OpenJDK 21.0.10",
+    "androidNdk": "27.1.12297006",
+    "androidSdk": 36
+  },
+  "ios": {
+    "result": "Release arm64 simulator build succeeded; native offline fixtures ran",
+    "configuration": "Release arm64 iphonesimulator",
+    "reason": "Earlier disk exhaustion resolved by removing generated Android compiler intermediates",
+    "earlierAttempt": "EXConstants modulemap missing while dependency regeneration overlapped build; procedural failure",
+    "cleanup": "Preserved simulator app and Android APK; removed task-generated compiler intermediates; final available disk approximately 2.5 GiB",
+    "runtime": "iPhone 17 Pro simulator, iOS 26.5, Hermes / RN 0.86.3",
+    "fixtureResults": "5 passed, 1 strict full-buffer timing failure, 2 HRTF unavailable",
+    "physicalDeviceValidation": false,
+    "app": "artifacts/TuneJS-simulator.app"
+  },
+  "physicalDevices": {
+    "ios": "paired devices unavailable",
+    "android": "adb listed no devices"
+  },
+  "electron": {
+    "version": "44.2.0",
+    "chromium": "152.0.7977.76",
+    "result": "BrowserWindow loadURL completed for first-sound page",
+    "audio": "not separately exercised in Electron",
+    "initialFailure": "top-level wait for app readiness stalled; callback entry loaded successfully"
+  },
+  "controllerTests": {
+    "passed": 9,
+    "kind": "test-double lifecycle tests; not PCM or device measurements"
+  },
+  "remaining": [
+    "native lifecycle/playback checks and 44.1 kHz frame conversion normalization",
+    "Android runtime fixtures",
+    "physical-device audio and interruption tests",
+    "native HRTF",
+    "capture clock mapping",
+    "Firefox/Safari/mobile browsers",
+    "latency/listening/reference workload"
+  ],
+  "android": {
+    "result": "Release arm64 build succeeded; runtime not tested",
+    "packageBytes": 40134070,
+    "sha256": "e07c32aeb4bfc67ba3128e52baf1aa3958f69260fd01d875387fcaaf9baf0f0a",
+    "finalBuild": "10 seconds; JS rebundled (1108 modules)",
+    "apk": "artifacts/tunejs-android-arm64-release.apk",
+    "packageIntegrity": "sha512-/LU6pDp05Cbz0bLVZCA1f80BicMRBytH6zQZ3yqJya+ITlKWHYdZl9rpHbEwSLZhAq720jqbn401ztBbhlywew=="
+  },
+  "sourceHashes": {
+    "src/engine.ts": "90650e7ebacf1c1398d67f59c81a025e7665c4fd69b434ecacddda258071df1f",
+    "experiments/fixtures.js": "b6f8b42925a0842ed71a9e777d4a5c02e3084e5f0138223719f355f9717baf24",
+    "dist/engine.js": "644ca4d5c479598c812aa5b0bab53fb690cd743531585a7be573956f6ee46161",
+    "examples/native/App.tsx": "cda0ef86bceaa1668e1525f0e7971dbc80eaa69370d3a464468c328b16469eee"
+  }
+}

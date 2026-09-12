@@ -1,0 +1,146 @@
+{
+  "date": "2026-09-06T04:17:40.272Z",
+  "scope": "same C++ offline kernel compiled to macOS arm64 and WASM; no device callback, RN JSI, HRTF, capture or worklet runtime",
+  "nativeExecutableBytes": 33728,
+  "wasmBytes": 1416,
+  "results": [
+    {
+      "kind": "timing",
+      "rate": 44100,
+      "nativeWasmError": 0,
+      "arithmeticError": 0,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.0070469798291595215,
+          "peak": 0.5,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.0070469798291595215,
+          "peak": 0.5,
+          "nonfinite": 0
+        }
+      ],
+      "nativeProcessWallMs": 466.568542,
+      "wasmRenderMs": 0.35154099999999744
+    },
+    {
+      "kind": "filter",
+      "rate": 44100,
+      "nativeWasmError": 0,
+      "arithmeticError": null,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.18762999237552655,
+          "peak": 0.2684231698513031,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.18762999237552655,
+          "peak": 0.2684231698513031,
+          "nonfinite": 0
+        }
+      ],
+      "nativeProcessWallMs": 7.490166000000045,
+      "wasmRenderMs": 1.1052920000001905
+    },
+    {
+      "kind": "pan",
+      "rate": 44100,
+      "nativeWasmError": 0,
+      "arithmeticError": null,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.17337998073767705,
+          "peak": 0.2451961189508438,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.034487422330508354,
+          "peak": 0.04877253994345665,
+          "nonfinite": 0
+        }
+      ],
+      "nativeProcessWallMs": 11.012291999999889,
+      "wasmRenderMs": 0.5833749999997053
+    },
+    {
+      "kind": "timing",
+      "rate": 48000,
+      "nativeWasmError": 0,
+      "arithmeticError": 0,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.0067546321757505,
+          "peak": 0.5,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.0067546321757505,
+          "peak": 0.5,
+          "nonfinite": 0
+        }
+      ],
+      "nativeProcessWallMs": 10.501957999999831,
+      "wasmRenderMs": 0.3505000000000109
+    },
+    {
+      "kind": "filter",
+      "rate": 48000,
+      "nativeWasmError": 0,
+      "arithmeticError": null,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.18763673100375103,
+          "peak": 0.26849472522735596,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.18763673100375103,
+          "peak": 0.26849472522735596,
+          "nonfinite": 0
+        }
+      ],
+      "nativeProcessWallMs": 9.262708999999631,
+      "wasmRenderMs": 0.5851249999996071
+    },
+    {
+      "kind": "pan",
+      "rate": 48000,
+      "nativeWasmError": 0,
+      "arithmeticError": null,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.17337998012984826,
+          "peak": 0.24519631266593933,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.03448742245844647,
+          "peak": 0.04877258092164993,
+          "nonfinite": 0
+        }
+      ],
+      "nativeProcessWallMs": 8.563374999999724,
+      "wasmRenderMs": 0.9173749999999927
+    }
+  ]
+}

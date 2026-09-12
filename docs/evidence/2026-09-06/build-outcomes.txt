@@ -1,0 +1,12 @@
+ios-build-final.log
+** BUILD SUCCEEDED **
+
+ios-diagnostic-build.log
+** BUILD SUCCEEDED **
+
+android-build-verified.log
+Android Bundled 2910ms index.ts (1108 modules)
+BUILD SUCCESSFUL in 10s
+
+electron-final.log
+{"status":"loaded","electron":"44.2.0","chrome":"152.0.7977.76","url":"http://127.0.0.1:4173/"}

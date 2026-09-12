@@ -2,7 +2,8 @@
 // Fixed pre-run tolerances: arithmetic 1e-5; onset <= 1 sample; repeatability 1e-7.
 // Version 3 adds an explicit scheduling conversion: `hostTime(frame, rate)` maps a target frame to the
 // seconds value handed to the host. The default is raw `frame / rate`; adapters may supply their own.
-export const fixtureVersion = 3;
+// Version 4 adds the delay-chain and convolver-identity mixing fixtures (tolerance 1e-5, see below).
+export const fixtureVersion = 4;
 export const rawSeconds = (frame, rate) => frame / rate;
 export const impulseFrames = [0, 127, 128, 129, 511, 1023, 1024, 8000, 16000, 24000, 32000, 40000];
 export function summarize(channels) {
@@ -44,10 +45,63 @@ export function analyzeTimingFixture(channels) {
   });
   return {onsetStatus:results.every(result=>result.maxOnsetErrorFrames!==null && result.maxOnsetErrorFrames<=1)?'pass':'fail',toleranceFrames:1,channels:results};
 }
+// Version 4 mixing fixtures. Delay chain: one impulse through three chained 10 ms DelayNodes with tap gains
+// 0.5^k plus the dry path; expected impulses at 0, D, 2D, 3D frames (D = 0.01 * rate, an integer at both rates).
+export const delayTapSeconds = 0.01, delayTapCount = 3;
+export function delayFixtureExpected(rate) {
+  const D=Math.round(delayTapSeconds*rate);
+  if(D!==delayTapSeconds*rate) throw new RangeError('Delay fixture needs an integer tap length at this sample rate.');
+  const expected=new Float32Array(rate);
+  for(let k=0;k<=delayTapCount;k++) expected[k*D]=Math.fround(0.5**k);
+  return expected;
+}
+// Convolver identity: a single impulse through a ConvolverNode (normalize=false) must reproduce the stereo
+// impulse response sample-for-sample. The response is seeded noise with a -60 dB exponential decay over 0.25 s.
+export const convolverSeeds = [1234, 5678], convolverSeconds = 0.25;
+export function mulberry32(seed) {
+  let state=seed>>>0;
+  return ()=>{ state=(state+0x6D2B79F5)>>>0; let t=state; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; };
+}
+export function syntheticImpulseResponse(frames, seed) {
+  if(!Number.isSafeInteger(frames) || frames<=0 || !Number.isSafeInteger(seed)) throw new RangeError('Impulse response needs a positive integer length and an integer seed.');
+  const random=mulberry32(seed), data=new Float32Array(frames);
+  for(let i=0;i<frames;i++) data[i]=(random()*2-1)*Math.exp(-3*Math.LN10*i/frames);
+  return data;
+}
+export function convolverFixtureExpected(rate) {
+  const frames=Math.round(convolverSeconds*rate);
+  return convolverSeeds.map(seed=>{ const expected=new Float32Array(rate); expected.set(syntheticImpulseResponse(frames,seed)); return expected; });
+}
+async function renderMixing(context, kind, rate, hostTime) {
+  const impulse=context.createBuffer(1,1,rate); impulse.getChannelData(0)[0]=1;
+  const source=context.createBufferSource(); source.buffer=impulse;
+  if(kind==='delay') {
+    if(typeof context.createDelay!=='function') return { unavailable:'DelayNode absent' };
+    const D=Math.round(delayTapSeconds*rate);
+    const dry=context.createGain(); dry.gain.setValueAtTime(1,0); source.connect(dry); dry.connect(context.destination);
+    let previous=source;
+    for(let k=1;k<=delayTapCount;k++) {
+      const delay=context.createDelay(delayTapSeconds); delay.delayTime.setValueAtTime(D/rate,0);
+      const tap=context.createGain(); tap.gain.setValueAtTime(0.5**k,0);
+      previous.connect(delay); delay.connect(tap); tap.connect(context.destination); previous=delay;
+    }
+  } else {
+    if(typeof context.createConvolver!=='function') return { unavailable:'ConvolverNode absent' };
+    const frames=Math.round(convolverSeconds*rate);
+    const response=context.createBuffer(2,frames,rate);
+    convolverSeeds.forEach((seed,channel)=>response.getChannelData(channel).set(syntheticImpulseResponse(frames,seed)));
+    const convolver=context.createConvolver(); convolver.normalize=false; convolver.buffer=response;
+    source.connect(convolver); convolver.connect(context.destination);
+  }
+  source.start(hostTime(0,rate));
+  const start=performance.now(); const output=await context.startRendering();
+  return { channels:[output.getChannelData(0),output.getChannelData(1)], renderMs:performance.now()-start };
+}
 export async function renderFixture(createOffline, kind, rate=48000, pan=-0.75, hostTime=rawSeconds) {
   if(typeof hostTime !== 'function') throw new TypeError('hostTime must be a function (frame, rate) => seconds.');
   const length = rate;
   const context = createOffline({ numberOfChannels: 2, length, sampleRate: rate });
+  if(kind === 'delay' || kind === 'convolver') return renderMixing(context, kind, rate, hostTime);
   const buffer = context.createBuffer(1, length, rate);
   const samples = buffer.getChannelData(0);
   if(kind === 'timing') { for(const frame of impulseFrames) samples[frame]=1; }
@@ -76,7 +130,7 @@ export async function runFixtures(createOffline, options={}) {
   const scheduling=options.scheduling ?? (options.hostTime ? 'custom' : 'raw-seconds');
   if(typeof hostTime !== 'function' || typeof scheduling !== 'string' || !scheduling) throw new TypeError('runFixtures options require a hostTime function and a nonempty scheduling label.');
   const results=[];
-  for(const rate of [44100,48000]) for(const kind of ['timing','filter','pan','hrtf']) {
+  for(const rate of [44100,48000]) for(const kind of ['timing','filter','pan','hrtf','delay','convolver']) {
     try {
       const output=await renderFixture(createOffline,kind,rate,-0.75,hostTime);
       if(output.unavailable) { results.push({kind,rate,status:'unavailable',reason:output.unavailable}); continue; }
@@ -98,9 +152,19 @@ export async function runFixtures(createOffline, options={}) {
         const expected=Float32Array.from({length:rate},(_,i)=>Math.fround(Math.sin(2*Math.PI*432*i/rate))*0.25*Math.cos(angle));
         arithmeticError=maxError(output.channels[0],expected);
       }
+      if(kind==='delay') {
+        const expected=delayFixtureExpected(rate);
+        arithmeticError=Math.max(...output.channels.map(x=>maxError(x,expected)));
+        observedOnsets=[];
+        for(let frame=0;frame<output.channels[0].length && observedOnsets.length<8;frame++) if(output.channels[0][frame]!==0) observedOnsets.push({frame,value:output.channels[0][frame]});
+      }
+      if(kind==='convolver') {
+        const expected=convolverFixtureExpected(rate);
+        arithmeticError=Math.max(...output.channels.map((x,i)=>maxError(x,expected[i])));
+      }
       const pass=stats.every(x=>x.nonfinite===0 && x.peak>0) && repeatError<=1e-7 && (arithmeticError===null || arithmeticError<=1e-5) && (mirrorError===null || mirrorError<=1e-5);
       results.push({kind,rate,status:pass?'pass':'fail',stats,repeatError,arithmeticError,mirrorError,observedOnsets,timing,renderMs:output.renderMs,
-        scope:kind==='hrtf'?'finite/nonzero/repeated fixed pose only; NOT localization/reference acceptance':kind==='filter'?'finite/repeatable smoke; NOT cross-backend reference acceptance':'arithmetic fixture'});
+        scope:kind==='hrtf'?'finite/nonzero/repeated fixed pose only; NOT localization/reference acceptance':kind==='filter'?'finite/repeatable smoke; NOT cross-backend reference acceptance':kind==='convolver'?'impulse-response identity through the host convolver; NOT a reverb quality judgement':'arithmetic fixture'});
     } catch(error) { results.push({kind,rate,status:'error',error:String(error)}); }
   }
   return {fixtureVersion,scheduling,results};

@@ -1,0 +1,1361 @@
+{
+  "date": "2026-09-12T12:55:01.712Z",
+  "platform": "ios",
+  "version": "26.5",
+  "rn": {
+    "major": 0,
+    "minor": 86,
+    "patch": 3
+  },
+  "scope": "release simulator offline PCM; no physical-device validation",
+  "fixtureVersion": 4,
+  "scheduling": "raw-seconds",
+  "results": [
+    {
+      "kind": "timing",
+      "rate": 44100,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.007046587308671112,
+          "peak": 0.5,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.007046587308671112,
+          "peak": 0.5,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 0.499755859375,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 0.25
+        },
+        {
+          "frame": 127,
+          "value": 0.281005859375
+        },
+        {
+          "frame": 128,
+          "value": 0.28125
+        },
+        {
+          "frame": 129,
+          "value": 0.281494140625
+        },
+        {
+          "frame": 511,
+          "value": 0.374755859375
+        },
+        {
+          "frame": 1022,
+          "value": 0.49951171875
+        },
+        {
+          "frame": 1024,
+          "value": 0.5
+        },
+        {
+          "frame": 8000,
+          "value": 0.5
+        },
+        {
+          "frame": 16000,
+          "value": 0.5
+        },
+        {
+          "frame": 24000,
+          "value": 0.5
+        },
+        {
+          "frame": 32000,
+          "value": 0.5
+        },
+        {
+          "frame": 40000,
+          "value": 0.5
+        }
+      ],
+      "timing": {
+        "onsetStatus": "pass",
+        "toleranceFrames": 1,
+        "channels": [
+          {
+            "expectedCount": 12,
+            "observedCount": 12,
+            "observedOnsets": [
+              {
+                "frame": 0,
+                "value": 0.25
+              },
+              {
+                "frame": 127,
+                "value": 0.281005859375
+              },
+              {
+                "frame": 128,
+                "value": 0.28125
+              },
+              {
+                "frame": 129,
+                "value": 0.281494140625
+              },
+              {
+                "frame": 511,
+                "value": 0.374755859375
+              },
+              {
+                "frame": 1022,
+                "value": 0.49951171875
+              },
+              {
+                "frame": 1024,
+                "value": 0.5
+              },
+              {
+                "frame": 8000,
+                "value": 0.5
+              },
+              {
+                "frame": 16000,
+                "value": 0.5
+              },
+              {
+                "frame": 24000,
+                "value": 0.5
+              },
+              {
+                "frame": 32000,
+                "value": 0.5
+              },
+              {
+                "frame": 40000,
+                "value": 0.5
+              }
+            ],
+            "frameOffsets": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              -1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "maxOnsetErrorFrames": 1,
+            "gainErrorAtActualOnset": 0
+          },
+          {
+            "expectedCount": 12,
+            "observedCount": 12,
+            "observedOnsets": [
+              {
+                "frame": 0,
+                "value": 0.25
+              },
+              {
+                "frame": 127,
+                "value": 0.281005859375
+              },
+              {
+                "frame": 128,
+                "value": 0.28125
+              },
+              {
+                "frame": 129,
+                "value": 0.281494140625
+              },
+              {
+                "frame": 511,
+                "value": 0.374755859375
+              },
+              {
+                "frame": 1022,
+                "value": 0.49951171875
+              },
+              {
+                "frame": 1024,
+                "value": 0.5
+              },
+              {
+                "frame": 8000,
+                "value": 0.5
+              },
+              {
+                "frame": 16000,
+                "value": 0.5
+              },
+              {
+                "frame": 24000,
+                "value": 0.5
+              },
+              {
+                "frame": 32000,
+                "value": 0.5
+              },
+              {
+                "frame": 40000,
+                "value": 0.5
+              }
+            ],
+            "frameOffsets": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              -1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "maxOnsetErrorFrames": 1,
+            "gainErrorAtActualOnset": 0
+          }
+        ]
+      },
+      "renderMs": 0.779874999076128,
+      "scope": "arithmetic fixture"
+    },
+    {
+      "kind": "filter",
+      "rate": 44100,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.1876303381942937,
+          "peak": 0.2684236168861389,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.1876303381942937,
+          "peak": 0.2684236168861389,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": null,
+      "mirrorError": null,
+      "observedOnsets": null,
+      "timing": null,
+      "renderMs": 0.765625,
+      "scope": "finite/repeatable smoke; NOT cross-backend reference acceptance"
+    },
+    {
+      "kind": "pan",
+      "rate": 44100,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.1733799756405835,
+          "peak": 0.24519610404968262,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.034487422673967705,
+          "peak": 0.04877253994345665,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 1.4901161193847656e-8,
+      "mirrorError": 1.4901161193847656e-8,
+      "observedOnsets": null,
+      "timing": null,
+      "renderMs": 0.8002090007066727,
+      "scope": "arithmetic fixture"
+    },
+    {
+      "kind": "hrtf",
+      "rate": 44100,
+      "status": "unavailable",
+      "reason": "PannerNode/AudioListener absent"
+    },
+    {
+      "kind": "delay",
+      "rate": 44100,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.0005952380952380953,
+          "peak": 0.125,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.0005952380952380953,
+          "peak": 0.125,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 0.875,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 0.125
+        }
+      ],
+      "timing": null,
+      "renderMs": 0.1685829982161522,
+      "scope": "arithmetic fixture"
+    },
+    {
+      "kind": "convolver",
+      "rate": 44100,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.07869936292431996,
+          "peak": 0.9920563697814941,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.07741929499217483,
+          "peak": 0.9447327852249146,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 0.04513469338417053,
+      "mirrorError": null,
+      "observedOnsets": null,
+      "timing": null,
+      "renderMs": 1.5384159982204437,
+      "scope": "impulse-response identity through the host convolver; NOT a reverb quality judgement"
+    },
+    {
+      "kind": "timing",
+      "rate": 48000,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.0067546321757505,
+          "peak": 0.5,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.0067546321757505,
+          "peak": 0.5,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 0,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 0.25
+        },
+        {
+          "frame": 127,
+          "value": 0.281005859375
+        },
+        {
+          "frame": 128,
+          "value": 0.28125
+        },
+        {
+          "frame": 129,
+          "value": 0.281494140625
+        },
+        {
+          "frame": 511,
+          "value": 0.374755859375
+        },
+        {
+          "frame": 1023,
+          "value": 0.499755859375
+        },
+        {
+          "frame": 1024,
+          "value": 0.5
+        },
+        {
+          "frame": 8000,
+          "value": 0.5
+        },
+        {
+          "frame": 16000,
+          "value": 0.5
+        },
+        {
+          "frame": 24000,
+          "value": 0.5
+        },
+        {
+          "frame": 32000,
+          "value": 0.5
+        },
+        {
+          "frame": 40000,
+          "value": 0.5
+        }
+      ],
+      "timing": {
+        "onsetStatus": "pass",
+        "toleranceFrames": 1,
+        "channels": [
+          {
+            "expectedCount": 12,
+            "observedCount": 12,
+            "observedOnsets": [
+              {
+                "frame": 0,
+                "value": 0.25
+              },
+              {
+                "frame": 127,
+                "value": 0.281005859375
+              },
+              {
+                "frame": 128,
+                "value": 0.28125
+              },
+              {
+                "frame": 129,
+                "value": 0.281494140625
+              },
+              {
+                "frame": 511,
+                "value": 0.374755859375
+              },
+              {
+                "frame": 1023,
+                "value": 0.499755859375
+              },
+              {
+                "frame": 1024,
+                "value": 0.5
+              },
+              {
+                "frame": 8000,
+                "value": 0.5
+              },
+              {
+                "frame": 16000,
+                "value": 0.5
+              },
+              {
+                "frame": 24000,
+                "value": 0.5
+              },
+              {
+                "frame": 32000,
+                "value": 0.5
+              },
+              {
+                "frame": 40000,
+                "value": 0.5
+              }
+            ],
+            "frameOffsets": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "maxOnsetErrorFrames": 0,
+            "gainErrorAtActualOnset": 0
+          },
+          {
+            "expectedCount": 12,
+            "observedCount": 12,
+            "observedOnsets": [
+              {
+                "frame": 0,
+                "value": 0.25
+              },
+              {
+                "frame": 127,
+                "value": 0.281005859375
+              },
+              {
+                "frame": 128,
+                "value": 0.28125
+              },
+              {
+                "frame": 129,
+                "value": 0.281494140625
+              },
+              {
+                "frame": 511,
+                "value": 0.374755859375
+              },
+              {
+                "frame": 1023,
+                "value": 0.499755859375
+              },
+              {
+                "frame": 1024,
+                "value": 0.5
+              },
+              {
+                "frame": 8000,
+                "value": 0.5
+              },
+              {
+                "frame": 16000,
+                "value": 0.5
+              },
+              {
+                "frame": 24000,
+                "value": 0.5
+              },
+              {
+                "frame": 32000,
+                "value": 0.5
+              },
+              {
+                "frame": 40000,
+                "value": 0.5
+              }
+            ],
+            "frameOffsets": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "maxOnsetErrorFrames": 0,
+            "gainErrorAtActualOnset": 0
+          }
+        ]
+      },
+      "renderMs": 0.5493750013411045,
+      "scope": "arithmetic fixture"
+    },
+    {
+      "kind": "filter",
+      "rate": 48000,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.18763656197487819,
+          "peak": 0.2684943974018097,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.18763656197487819,
+          "peak": 0.2684943974018097,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": null,
+      "mirrorError": null,
+      "observedOnsets": null,
+      "timing": null,
+      "renderMs": 0.7990420013666153,
+      "scope": "finite/repeatable smoke; NOT cross-backend reference acceptance"
+    },
+    {
+      "kind": "pan",
+      "rate": 48000,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.17337997511594494,
+          "peak": 0.24519631266593933,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.03448742266992635,
+          "peak": 0.04877258092164993,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 1.4901161193847656e-8,
+      "mirrorError": 1.4901161193847656e-8,
+      "observedOnsets": null,
+      "timing": null,
+      "renderMs": 1.000874999910593,
+      "scope": "arithmetic fixture"
+    },
+    {
+      "kind": "hrtf",
+      "rate": 48000,
+      "status": "unavailable",
+      "reason": "PannerNode/AudioListener absent"
+    },
+    {
+      "kind": "delay",
+      "rate": 48000,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.000570544330734548,
+          "peak": 0.125,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.000570544330734548,
+          "peak": 0.125,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 0.875,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 0.125
+        }
+      ],
+      "timing": null,
+      "renderMs": 0.2398340031504631,
+      "scope": "arithmetic fixture"
+    },
+    {
+      "kind": "convolver",
+      "rate": 48000,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.07862784837257072,
+          "peak": 0.9927051663398743,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.07743124345044829,
+          "peak": 0.9451406598091125,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 0.04691454768180847,
+      "mirrorError": null,
+      "observedOnsets": null,
+      "timing": null,
+      "renderMs": 3.840334001928568,
+      "scope": "impulse-response identity through the host convolver; NOT a reverb quality judgement"
+    }
+  ],
+  "adapterScheduled": {
+    "fixtureVersion": 4,
+    "scheduling": "native-adapter-frames",
+    "results": [
+      {
+        "kind": "timing",
+        "rate": 44100,
+        "status": "pass",
+        "stats": [
+          {
+            "frames": 44100,
+            "rms": 0.0070469798291595215,
+            "peak": 0.5,
+            "nonfinite": 0
+          },
+          {
+            "frames": 44100,
+            "rms": 0.0070469798291595215,
+            "peak": 0.5,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 0,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 0.25
+          },
+          {
+            "frame": 127,
+            "value": 0.281005859375
+          },
+          {
+            "frame": 128,
+            "value": 0.28125
+          },
+          {
+            "frame": 129,
+            "value": 0.281494140625
+          },
+          {
+            "frame": 511,
+            "value": 0.374755859375
+          },
+          {
+            "frame": 1023,
+            "value": 0.499755859375
+          },
+          {
+            "frame": 1024,
+            "value": 0.5
+          },
+          {
+            "frame": 8000,
+            "value": 0.5
+          },
+          {
+            "frame": 16000,
+            "value": 0.5
+          },
+          {
+            "frame": 24000,
+            "value": 0.5
+          },
+          {
+            "frame": 32000,
+            "value": 0.5
+          },
+          {
+            "frame": 40000,
+            "value": 0.5
+          }
+        ],
+        "timing": {
+          "onsetStatus": "pass",
+          "toleranceFrames": 1,
+          "channels": [
+            {
+              "expectedCount": 12,
+              "observedCount": 12,
+              "observedOnsets": [
+                {
+                  "frame": 0,
+                  "value": 0.25
+                },
+                {
+                  "frame": 127,
+                  "value": 0.281005859375
+                },
+                {
+                  "frame": 128,
+                  "value": 0.28125
+                },
+                {
+                  "frame": 129,
+                  "value": 0.281494140625
+                },
+                {
+                  "frame": 511,
+                  "value": 0.374755859375
+                },
+                {
+                  "frame": 1023,
+                  "value": 0.499755859375
+                },
+                {
+                  "frame": 1024,
+                  "value": 0.5
+                },
+                {
+                  "frame": 8000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 16000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 24000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 32000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 40000,
+                  "value": 0.5
+                }
+              ],
+              "frameOffsets": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "maxOnsetErrorFrames": 0,
+              "gainErrorAtActualOnset": 0
+            },
+            {
+              "expectedCount": 12,
+              "observedCount": 12,
+              "observedOnsets": [
+                {
+                  "frame": 0,
+                  "value": 0.25
+                },
+                {
+                  "frame": 127,
+                  "value": 0.281005859375
+                },
+                {
+                  "frame": 128,
+                  "value": 0.28125
+                },
+                {
+                  "frame": 129,
+                  "value": 0.281494140625
+                },
+                {
+                  "frame": 511,
+                  "value": 0.374755859375
+                },
+                {
+                  "frame": 1023,
+                  "value": 0.499755859375
+                },
+                {
+                  "frame": 1024,
+                  "value": 0.5
+                },
+                {
+                  "frame": 8000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 16000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 24000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 32000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 40000,
+                  "value": 0.5
+                }
+              ],
+              "frameOffsets": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "maxOnsetErrorFrames": 0,
+              "gainErrorAtActualOnset": 0
+            }
+          ]
+        },
+        "renderMs": 0.5502500012516975,
+        "scope": "arithmetic fixture"
+      },
+      {
+        "kind": "filter",
+        "rate": 44100,
+        "status": "pass",
+        "stats": [
+          {
+            "frames": 44100,
+            "rms": 0.1876303381942937,
+            "peak": 0.2684236168861389,
+            "nonfinite": 0
+          },
+          {
+            "frames": 44100,
+            "rms": 0.1876303381942937,
+            "peak": 0.2684236168861389,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": null,
+        "mirrorError": null,
+        "observedOnsets": null,
+        "timing": null,
+        "renderMs": 0.7404160015285015,
+        "scope": "finite/repeatable smoke; NOT cross-backend reference acceptance"
+      },
+      {
+        "kind": "pan",
+        "rate": 44100,
+        "status": "pass",
+        "stats": [
+          {
+            "frames": 44100,
+            "rms": 0.1733799756405835,
+            "peak": 0.24519610404968262,
+            "nonfinite": 0
+          },
+          {
+            "frames": 44100,
+            "rms": 0.034487422673967705,
+            "peak": 0.04877253994345665,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 1.4901161193847656e-8,
+        "mirrorError": 1.4901161193847656e-8,
+        "observedOnsets": null,
+        "timing": null,
+        "renderMs": 0.7382079996168613,
+        "scope": "arithmetic fixture"
+      },
+      {
+        "kind": "hrtf",
+        "rate": 44100,
+        "status": "unavailable",
+        "reason": "PannerNode/AudioListener absent"
+      },
+      {
+        "kind": "delay",
+        "rate": 44100,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 44100,
+            "rms": 0.0005952380952380953,
+            "peak": 0.125,
+            "nonfinite": 0
+          },
+          {
+            "frames": 44100,
+            "rms": 0.0005952380952380953,
+            "peak": 0.125,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 0.875,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 0.125
+          }
+        ],
+        "timing": null,
+        "renderMs": 0.27504200115799904,
+        "scope": "arithmetic fixture"
+      },
+      {
+        "kind": "convolver",
+        "rate": 44100,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 44100,
+            "rms": 0.07869936292431996,
+            "peak": 0.9920563697814941,
+            "nonfinite": 0
+          },
+          {
+            "frames": 44100,
+            "rms": 0.07741929499217483,
+            "peak": 0.9447327852249146,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 0.04513469338417053,
+        "mirrorError": null,
+        "observedOnsets": null,
+        "timing": null,
+        "renderMs": 2.977708000689745,
+        "scope": "impulse-response identity through the host convolver; NOT a reverb quality judgement"
+      },
+      {
+        "kind": "timing",
+        "rate": 48000,
+        "status": "pass",
+        "stats": [
+          {
+            "frames": 48000,
+            "rms": 0.0067546321757505,
+            "peak": 0.5,
+            "nonfinite": 0
+          },
+          {
+            "frames": 48000,
+            "rms": 0.0067546321757505,
+            "peak": 0.5,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 0,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 0.25
+          },
+          {
+            "frame": 127,
+            "value": 0.281005859375
+          },
+          {
+            "frame": 128,
+            "value": 0.28125
+          },
+          {
+            "frame": 129,
+            "value": 0.281494140625
+          },
+          {
+            "frame": 511,
+            "value": 0.374755859375
+          },
+          {
+            "frame": 1023,
+            "value": 0.499755859375
+          },
+          {
+            "frame": 1024,
+            "value": 0.5
+          },
+          {
+            "frame": 8000,
+            "value": 0.5
+          },
+          {
+            "frame": 16000,
+            "value": 0.5
+          },
+          {
+            "frame": 24000,
+            "value": 0.5
+          },
+          {
+            "frame": 32000,
+            "value": 0.5
+          },
+          {
+            "frame": 40000,
+            "value": 0.5
+          }
+        ],
+        "timing": {
+          "onsetStatus": "pass",
+          "toleranceFrames": 1,
+          "channels": [
+            {
+              "expectedCount": 12,
+              "observedCount": 12,
+              "observedOnsets": [
+                {
+                  "frame": 0,
+                  "value": 0.25
+                },
+                {
+                  "frame": 127,
+                  "value": 0.281005859375
+                },
+                {
+                  "frame": 128,
+                  "value": 0.28125
+                },
+                {
+                  "frame": 129,
+                  "value": 0.281494140625
+                },
+                {
+                  "frame": 511,
+                  "value": 0.374755859375
+                },
+                {
+                  "frame": 1023,
+                  "value": 0.499755859375
+                },
+                {
+                  "frame": 1024,
+                  "value": 0.5
+                },
+                {
+                  "frame": 8000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 16000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 24000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 32000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 40000,
+                  "value": 0.5
+                }
+              ],
+              "frameOffsets": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "maxOnsetErrorFrames": 0,
+              "gainErrorAtActualOnset": 0
+            },
+            {
+              "expectedCount": 12,
+              "observedCount": 12,
+              "observedOnsets": [
+                {
+                  "frame": 0,
+                  "value": 0.25
+                },
+                {
+                  "frame": 127,
+                  "value": 0.281005859375
+                },
+                {
+                  "frame": 128,
+                  "value": 0.28125
+                },
+                {
+                  "frame": 129,
+                  "value": 0.281494140625
+                },
+                {
+                  "frame": 511,
+                  "value": 0.374755859375
+                },
+                {
+                  "frame": 1023,
+                  "value": 0.499755859375
+                },
+                {
+                  "frame": 1024,
+                  "value": 0.5
+                },
+                {
+                  "frame": 8000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 16000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 24000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 32000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 40000,
+                  "value": 0.5
+                }
+              ],
+              "frameOffsets": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "maxOnsetErrorFrames": 0,
+              "gainErrorAtActualOnset": 0
+            }
+          ]
+        },
+        "renderMs": 0.5863750018179417,
+        "scope": "arithmetic fixture"
+      },
+      {
+        "kind": "filter",
+        "rate": 48000,
+        "status": "pass",
+        "stats": [
+          {
+            "frames": 48000,
+            "rms": 0.18763656197487819,
+            "peak": 0.2684943974018097,
+            "nonfinite": 0
+          },
+          {
+            "frames": 48000,
+            "rms": 0.18763656197487819,
+            "peak": 0.2684943974018097,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": null,
+        "mirrorError": null,
+        "observedOnsets": null,
+        "timing": null,
+        "renderMs": 0.7630840018391609,
+        "scope": "finite/repeatable smoke; NOT cross-backend reference acceptance"
+      },
+      {
+        "kind": "pan",
+        "rate": 48000,
+        "status": "pass",
+        "stats": [
+          {
+            "frames": 48000,
+            "rms": 0.17337997511594494,
+            "peak": 0.24519631266593933,
+            "nonfinite": 0
+          },
+          {
+            "frames": 48000,
+            "rms": 0.03448742266992635,
+            "peak": 0.04877258092164993,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 1.4901161193847656e-8,
+        "mirrorError": 1.4901161193847656e-8,
+        "observedOnsets": null,
+        "timing": null,
+        "renderMs": 0.9284169971942902,
+        "scope": "arithmetic fixture"
+      },
+      {
+        "kind": "hrtf",
+        "rate": 48000,
+        "status": "unavailable",
+        "reason": "PannerNode/AudioListener absent"
+      },
+      {
+        "kind": "delay",
+        "rate": 48000,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 48000,
+            "rms": 0.001141088661469096,
+            "peak": 0.25,
+            "nonfinite": 0
+          },
+          {
+            "frames": 48000,
+            "rms": 0.001141088661469096,
+            "peak": 0.25,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0.125,
+        "arithmeticError": 0.75,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 0.25
+          }
+        ],
+        "timing": null,
+        "renderMs": 0.24333300068974495,
+        "scope": "arithmetic fixture"
+      },
+      {
+        "kind": "convolver",
+        "rate": 48000,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 48000,
+            "rms": 0.07862784837257072,
+            "peak": 0.9927051663398743,
+            "nonfinite": 0
+          },
+          {
+            "frames": 48000,
+            "rms": 0.07743124345044829,
+            "peak": 0.9451406598091125,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 0.04691454768180847,
+        "mirrorError": null,
+        "observedOnsets": null,
+        "timing": null,
+        "renderMs": 2.5975840017199516,
+        "scope": "impulse-response identity through the host convolver; NOT a reverb quality judgement"
+      }
+    ]
+  }
+}

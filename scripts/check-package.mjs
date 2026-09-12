@@ -56,6 +56,7 @@ async function example() {
   e.instrument(softKeys).play(['C4','E4'],{duration:{seconds:1}}).stop();
   const clip = await e.sample({ id: 'clip', url: '/clip.wav' });
   clip.play({ loop: true }).stop();
+  e.instrument(softKeys).connect(e.delay({ time: { seconds: 0.3 } })).connect(e.reverb()).connect(e.pan({ pan: -0.3 })).connect(e.bus({ gainDb: -6 })).connect(e.output);
   await e.dispose();
 }
 void idle;

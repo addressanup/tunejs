@@ -4,24 +4,30 @@ import type { Engine } from './engine.js';
 export type Seconds = { seconds: number };
 export interface OwnedVoice { readonly state: string; dispose(): void }
 
+export interface ParamMapping { toHost(value: number): number; fromHost(host: number): number }
+const IDENTITY_MAPPING: ParamMapping = { toHost: value => value, fromHost: value => value };
+
 export class Param {
   #host?: HostParam;
   #from: number;
   #target: number;
   #start = 0;
   #end = 0;
-  constructor(private owner: GraphNode, value: number, readonly units: string, readonly min: number, readonly max: number) {
+  readonly #mapping: ParamMapping;
+  constructor(private owner: GraphNode, value: number, readonly units: string, readonly min: number, readonly max: number, mapping?: ParamMapping) {
     this.#from = this.#target = finite(value, min, max, units);
+    this.#mapping = mapping ?? IDENTITY_MAPPING;
   }
   get value(): number {
+    const { toHost, fromHost } = this.#mapping;
     const t = this.owner.engine.currentTime;
-    return this.#end <= t ? this.#target : this.#from + (this.#target - this.#from) * Math.max(0, (t - this.#start) / (this.#end - this.#start));
+    return this.#end <= t ? this.#target : fromHost(toHost(this.#from) + (toHost(this.#target) - toHost(this.#from)) * Math.max(0, (t - this.#start) / (this.#end - this.#start)));
   }
   /** @internal */ bind(host?: HostParam): void {
     if (host) {
       const now = this.owner.engine.currentTime;
-      host.setValueAtTime(this.value, now);
-      if (this.#end > now) host.linearRampToValueAtTime(this.#target, this.#end);
+      host.setValueAtTime(this.#mapping.toHost(this.value), now);
+      if (this.#end > now) host.linearRampToValueAtTime(this.#mapping.toHost(this.#target), this.#end);
     }
     this.#host = host;
   }
@@ -32,12 +38,13 @@ export class Param {
     finite(duration.seconds, 0, 3600, 'ramp seconds');
     const now = this.owner.engine.currentTime;
     const current = this.value;
+    const { toHost } = this.#mapping;
     // Own the ramp calculation: avoids relying on differing native AudioParam.value semantics.
     if (this.#host) {
       this.#host.cancelScheduledValues(now);
-      this.#host.setValueAtTime(current, now);
-      if (duration.seconds === 0) this.#host.setValueAtTime(value, now);
-      else this.#host.linearRampToValueAtTime(value, now + duration.seconds);
+      this.#host.setValueAtTime(toHost(current), now);
+      if (duration.seconds === 0) this.#host.setValueAtTime(toHost(value), now);
+      else this.#host.linearRampToValueAtTime(toHost(value), now + duration.seconds);
     }
     this.#from = current; this.#target = value; this.#start = now; this.#end = now + duration.seconds;
     return this;
@@ -48,7 +55,7 @@ export class GraphNode {
   /** @internal */ host?: HostNode;
   /** @internal */ readonly targets = new Set<GraphNode>();
   #disposed = false;
-  /** @internal */ constructor(readonly engine: Engine, readonly kind: 'source' | 'gain' | 'filter' | 'output') {}
+  /** @internal */ constructor(readonly engine: Engine, readonly kind: 'source' | 'gain' | 'filter' | 'bus' | 'pan' | 'delay' | 'reverb' | 'output') {}
   /** @internal */ assertAlive(): void {
     this.engine.assertAlive();
     if (this.#disposed) throw new TuneError('DISPOSED', `${this.kind} is disposed.`, 'Create a new graph object.');
@@ -60,7 +67,7 @@ export class GraphNode {
       throw new TuneError('INVALID_CONNECTION', 'Routing requires an acyclic source → processor → output graph.', 'Remove the cycle or choose a processor/output target.');
     }
     if (!this.targets.has(target)) {
-      if (this.host && target.host) this.host.connect(target.host);
+      if (this.host && target.input) this.host.connect(target.input);
       this.targets.add(target);
     }
     return target;
@@ -72,9 +79,10 @@ export class GraphNode {
     if (target) this.targets.delete(target); else this.targets.clear();
     this.reconnect();
   }
+  /** @internal */ get input(): HostNode | undefined { return this.host; }
   /** @internal */ reconnect(): void {
     this.host?.disconnect();
-    for (const target of this.targets) if (target.host) this.host?.connect(target.host);
+    for (const target of this.targets) if (target.input) this.host?.connect(target.input);
   }
   /** @internal */ prepare(context: HostContext): void { void context; }
   dispose(): void {

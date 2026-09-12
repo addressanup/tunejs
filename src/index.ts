@@ -6,6 +6,7 @@ export { Instrument, InstrumentVoice, noteToFrequency } from './instrument.js';
 export type { Envelope, InstrumentPreset, InstrumentLayer } from './instrument.js';
 export { Sample, SampleVoice } from './sample.js';
 export type { SampleAsset } from './sample.js';
+export { Bus, Pan, Delay, Reverb, syntheticReverbResponse } from './mixing.js';
 export { TuneError } from './errors.js';
 export type { ErrorCode } from './errors.js';
 export type { Adapter } from './backend.js';

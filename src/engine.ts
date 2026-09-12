@@ -2,11 +2,12 @@ import type { Adapter, HostContext } from './backend.js';
 import { decodeWav } from './assets.js';
 import { TuneError, finite, integerFrame } from './errors.js';
 import { Filter, Gain, GraphNode, Oscillator } from './graph.js';
-import type { OwnedVoice } from './graph.js';
+import type { OwnedVoice, Seconds } from './graph.js';
 import { Instrument } from './instrument.js';
 import type { InstrumentPreset } from './instrument.js';
 import { Sample } from './sample.js';
 import type { SampleAsset, SampleEntry } from './sample.js';
+import { Bus, Delay, Pan, Reverb } from './mixing.js';
 export type EngineState = 'idle' | 'starting' | 'running' | 'suspended' | 'interrupted' | 'failed' | 'disposed';
 
 export class Engine {
@@ -34,7 +35,7 @@ export class Engine {
   get diagnostics() {
     return { state: this.state, backend: this.adapter.name, sampleRate: this.#context?.sampleRate ?? null, nodes: this.nodes.size, voices: this.voices.size, cachedAssetBytes: [...this.#assets.values()].reduce((bytes, entry) => bytes + entry.decoded.channels.reduce((total, channel) => total + channel.length, 0) * 4, 0), taps: 0, underruns: null, outputLatencySeconds: null };
   }
-  readonly capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, spatial: false, capture: false, projects: false, offline: false, backgroundPlayback: false });
+  readonly capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, spatial: false, capture: false, projects: false, offline: false, backgroundPlayback: false });
   /** @internal */ assertAlive(): void { if (this.#state === 'disposed') throw new TuneError('DISPOSED', 'Engine is disposed.', 'Create a new engine.'); }
   /** @internal */ runningContext(): HostContext {
     this.assertAlive();
@@ -149,6 +150,22 @@ export class Engine {
       }
     }
     return this.add(new Sample(this, entry));
+  }
+  bus(options: { gainDb?: number } = {}): Bus {
+    this.assertAlive();
+    return this.add(new Bus(this, options.gainDb ?? 0));
+  }
+  pan(options: { pan?: number } = {}): Pan {
+    this.assertAlive();
+    return this.add(new Pan(this, options.pan ?? 0));
+  }
+  delay(options: { time?: Seconds; feedback?: number; mix?: number; taps?: number } = {}): Delay {
+    this.assertAlive();
+    return this.add(new Delay(this, options));
+  }
+  reverb(options: { decay?: Seconds; mix?: number } = {}): Reverb {
+    this.assertAlive();
+    return this.add(new Reverb(this, options));
   }
   clearAssets(): number {
     let released = 0;

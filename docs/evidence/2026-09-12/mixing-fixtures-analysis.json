@@ -1,0 +1,25 @@
+{
+  "fixtureVersion": 4,
+  "sources": ["browser-fixtures-v4.json", "native-results-v4-ios.json", "native-results-v4-android-emulator.json"],
+  "hosts": {
+    "browser": "headless Google Chrome on this Mac, OfflineAudioContext",
+    "ios": "iPhone 17 Pro simulator, iOS 26.5, React Native 0.86.3, React Native Audio API 0.13.3, Release, OfflineAudioContext",
+    "android": "emulator AVD dosekeep_api35 (API 35, arm64-v8a), same React Native / Audio API versions, Release APK"
+  },
+  "delayChain": {
+    "expected": "impulses 1, 0.5, 0.25, 0.125 at frames 0, D, 2D, 3D (D = 441 at 44.1 kHz, 480 at 48 kHz)",
+    "browser": {"44100": {"status": "pass", "arithmeticError": 0, "onsets": [0, 441, 882, 1323]}, "48000": {"status": "pass", "arithmeticError": 0, "onsets": [0, 480, 960, 1440]}},
+    "ios": {"44100": {"status": "fail", "arithmeticError": 0.875, "onsets": [{"frame": 0, "value": 0.125}], "repeatError": 0}, "48000": {"status": "fail", "arithmeticError": 0.875, "onsets": [{"frame": 0, "value": 0.125}], "repeatError": 0}},
+    "android": {"44100": {"status": "fail", "arithmeticError": 0.75, "onsets": [{"frame": 0, "value": 0.25}], "repeatError": 0}, "48000": {"status": "fail", "arithmeticError": 0.5, "onsets": [{"frame": 0, "value": 0.5}], "repeatError": 0.375}},
+    "reading": "On both native hosts the output contains a single impulse at frame 0 whose value equals one tap gain (0.5^3 on iOS; 0.5^2 or 0.5^1 on Android, differing between the two Android renders of the same fixture). The dry path (gain 1 at frame 0) and the delayed taps are absent. This is consistent with the host keeping only part of the fan-out/fan-in graph and applying no delay, but the topology has not been isolated yet; the Android repeat mismatch also shows nondeterministic offline rendering for this graph."
+  },
+  "convolverIdentity": {
+    "expected": "single impulse through ConvolverNode(normalize=false) reproduces the seeded 0.25 s stereo response",
+    "browser": {"44100": {"status": "pass", "arithmeticError": 2.384185791015625e-7}, "48000": {"status": "pass", "arithmeticError": 2.384185791015625e-7}},
+    "ios": {"44100": {"status": "fail", "arithmeticError": 0.04513469338417053, "repeatError": 0}, "48000": {"status": "fail", "arithmeticError": 0.04691454768180847, "repeatError": 0}},
+    "android": {"44100": {"status": "fail", "arithmeticError": 0.04513469338417053, "repeatError": 0}, "48000": {"status": "fail", "arithmeticError": 0.04691454768180847, "repeatError": 0}},
+    "reading": "Native output is repeatable and identical between iOS and Android, has RMS within 0.2% of the response and peak about 1% higher, but deviates from the response by up to 4.7% of full scale. The host convolver therefore does not reproduce the impulse response sample-for-sample; the deviation pattern (scale, lag, or channel handling) is not yet isolated."
+  },
+  "unchanged": "timing (raw fail at 44.1 kHz, adapter-scheduled pass), filter, pan and HRTF results are the same as the fixture-version-3 runs on all three hosts.",
+  "interpretation": "TuneJS delay and reverb effects are verified only on the browser host. React Native Audio API 0.13.3 does not pass the delay-chain or convolver-identity fixtures in OfflineAudioContext on either platform, so native effect parity is an open host gate rather than a TuneJS bug. Next step: topology-isolating fixtures (single delay, source fan-out, destination fan-in) and a convolver fit diagnostic before deciding between an upstream fix, a TuneJS-owned DSP path, or a documented native limitation."
+}

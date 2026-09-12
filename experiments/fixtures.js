@@ -4,7 +4,8 @@
 // seconds value handed to the host. The default is raw `frame / rate`; adapters may supply their own.
 // Version 4 adds the delay-chain and convolver-identity mixing fixtures (tolerance 1e-5, see below).
 // Version 5 adds graph-topology probes (single delay, source fan-out, destination fan-in) and a convolver fit diagnostic.
-export const fixtureVersion = 5;
+// Version 6 adds the master-gain variants of the fan-out/fan-in probes.
+export const fixtureVersion = 6;
 export const rawSeconds = (frame, rate) => frame / rate;
 export const impulseFrames = [0, 127, 128, 129, 511, 1023, 1024, 8000, 16000, 24000, 32000, 40000];
 export function summarize(channels) {
@@ -75,12 +76,14 @@ export function convolverFixtureExpected(rate) {
 }
 // Version 5 topology probes isolate the native delay-chain failure: one DelayNode alone (impulse at D, value 1),
 // source fan-out to two gains (1 + 0.5 at frame 0), and two sources fanning directly into the destination (2 at frame 0).
-export const topologyKinds = ['delayonly','fanout','fanin'];
+// Version 6 adds the master-gain variants: the same fan-out/fan-in summed through one GainNode that is the only
+// input of the destination (the topology TuneJS uses for engine.output).
+export const topologyKinds = ['delayonly','fanout','fanin','fanout-gain','fanin-gain'];
 export function topologyFixtureExpected(kind, rate) {
   const expected=new Float32Array(rate);
   if(kind==='delayonly') expected[Math.round(delayTapSeconds*rate)]=1;
-  else if(kind==='fanout') expected[0]=1.5;
-  else if(kind==='fanin') expected[0]=2;
+  else if(kind==='fanout' || kind==='fanout-gain') expected[0]=1.5;
+  else if(kind==='fanin' || kind==='fanin-gain') expected[0]=2;
   else throw new RangeError(`Unknown topology fixture ${kind}.`);
   return expected;
 }
@@ -106,12 +109,16 @@ async function renderMixing(context, kind, rate, hostTime) {
     const D=Math.round(delayTapSeconds*rate);
     const delay=context.createDelay(delayTapSeconds); delay.delayTime.setValueAtTime(D/rate,0);
     source.connect(delay); delay.connect(context.destination);
-  } else if(kind==='fanout') {
+  } else if(kind==='fanout' || kind==='fanout-gain') {
+    const sink=kind==='fanout-gain'?context.createGain():context.destination;
+    if(sink!==context.destination) { sink.gain.setValueAtTime(1,0); sink.connect(context.destination); }
     const a=context.createGain(); a.gain.setValueAtTime(1,0); const b=context.createGain(); b.gain.setValueAtTime(0.5,0);
-    source.connect(a); source.connect(b); a.connect(context.destination); b.connect(context.destination);
-  } else if(kind==='fanin') {
+    source.connect(a); source.connect(b); a.connect(sink); b.connect(sink);
+  } else if(kind==='fanin' || kind==='fanin-gain') {
+    const sink=kind==='fanin-gain'?context.createGain():context.destination;
+    if(sink!==context.destination) { sink.gain.setValueAtTime(1,0); sink.connect(context.destination); }
     const second=context.createBufferSource(); second.buffer=impulse;
-    source.connect(context.destination); second.connect(context.destination);
+    source.connect(sink); second.connect(sink);
     second.start(hostTime(0,rate));
   } else if(kind==='delay') {
     if(typeof context.createDelay!=='function') return { unavailable:'DelayNode absent' };

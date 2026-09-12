@@ -120,7 +120,7 @@ test('fixture reports retain strict timing failures alongside onset diagnostics'
     };
   };
   const report=await fixtures.runFixtures(createOffline);
-  assert.equal(report.fixtureVersion,5);
+  assert.equal(report.fixtureVersion,6);
   assert.equal(report.scheduling,'raw-seconds');
   for(const kind of ['delay','convolver']) for(const result of report.results.filter(result=>result.kind===kind)) {
     assert.equal(result.status,'unavailable');
@@ -166,7 +166,7 @@ test('raw seconds shift frame 1023 on a truncating host at 44.1 kHz; adapter fra
 test('fixture reports label the scheduling conversion and reject malformed options',async()=>{
   const native=nativeAdapter(()=>{throw new Error('offline fixture only');});
   const report=await fixtures.runFixtures(truncatingOffline,{hostTime:native.hostTime,scheduling:'native-adapter-frames'});
-  assert.equal(report.fixtureVersion,5);
+  assert.equal(report.fixtureVersion,6);
   assert.equal(report.scheduling,'native-adapter-frames');
   for(const result of report.results.filter(result=>result.kind==='timing')) {
     assert.equal(result.status,'pass');
@@ -251,7 +251,7 @@ test('an ideal host passes the delay-chain and convolver-identity fixtures at bo
 
 test('topology probes and convolver fit diagnostics behave on an ideal host',async()=>{
   const report=await fixtures.runFixtures(idealMixingOffline);
-  assert.equal(report.fixtureVersion,5);
+  assert.equal(report.fixtureVersion,6);
   for(const kind of fixtures.topologyKinds) for(const result of report.results.filter(result=>result.kind===kind)) {
     assert.equal(result.status,'pass',JSON.stringify(result));
     assert.equal(result.arithmeticError,0);
@@ -260,6 +260,9 @@ test('topology probes and convolver fit diagnostics behave on an ideal host',asy
   assert.deepEqual(delayOnly.observedOnsets,[{frame:441,value:1}]);
   assert.deepEqual(report.results.find(result=>result.kind==='fanout'&&result.rate===48000).observedOnsets,[{frame:0,value:1.5}]);
   assert.deepEqual(report.results.find(result=>result.kind==='fanin'&&result.rate===48000).observedOnsets,[{frame:0,value:2}]);
+  assert.deepEqual(report.results.find(result=>result.kind==='fanout-gain'&&result.rate===44100).observedOnsets,[{frame:0,value:1.5}]);
+  assert.deepEqual(report.results.find(result=>result.kind==='fanin-gain'&&result.rate===44100).observedOnsets,[{frame:0,value:2}]);
+  assert.equal(report.results.length,22);
   const convolver=report.results.find(result=>result.kind==='convolver'&&result.rate===48000);
   assert.equal(convolver.fit.length,2);
   for(const fit of convolver.fit) { assert.equal(fit.lagFrames,0); assert.ok(Math.abs(fit.scale-1)<=1e-6); assert.ok(fit.residual<=1e-6); }

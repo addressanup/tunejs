@@ -1,0 +1,10 @@
+{
+  "fixtureVersion": 6,
+  "sources": ["browser-fixtures.json", "native-results-ios.json", "native-results-android.json"],
+  "probes": {
+    "fanout-gain": {"expected": "1.5 at frame 0 (source → gain 1 and gain 0.5 → one summing GainNode → destination)", "browser": "pass, error 0 at both rates", "native": "0.5 at frame 0 on iOS simulator and Android emulator, both rates, repeatError 0"},
+    "fanin-gain": {"expected": "2 at frame 0 (two impulse sources → one summing GainNode → destination)", "browser": "pass, error 0 at both rates", "native": "1 at frame 0 on both platforms, both rates, repeatError 0"}
+  },
+  "correction": "The fixture-version-5 reading that fan-in into a GainNode sums correctly was wrong. The timing fixture's twelve sources are never simultaneously active, so it cannot distinguish summation from a single surviving input. With simultaneous inputs, the native OfflineAudioContext delivers one input at a GainNode as well as at the destination.",
+  "consequence": "In the native OfflineAudioContext, simultaneous inputs to any node are not summed. Whether the live AudioContext behaves the same is unknown and decisive for polyphony (three instrument voices feed one filter) — a live-context probe through an AnalyserNode is the next measurement. The TuneJS master GainNode stays as the output structure (single destination edge, future master level) but does not by itself resolve the summation defect."
+}

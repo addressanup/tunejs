@@ -9,7 +9,8 @@
     ".": {"types": "./dist/index.d.ts", "default": "./dist/index.js"},
     "./browser": {"types": "./dist/adapters/browser.d.ts", "default": "./dist/adapters/browser.js"},
     "./native": {"types": "./dist/adapters/native.d.ts", "default": "./dist/adapters/native.js"},
-    "./presets": {"types": "./dist/presets.d.ts", "default": "./dist/presets.js"}
+    "./presets": {"types": "./dist/presets.d.ts", "default": "./dist/presets.js"},
+    "./three": {"types": "./dist/three.d.ts", "default": "./dist/three.js"}
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

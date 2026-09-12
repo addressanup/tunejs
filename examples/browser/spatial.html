@@ -1,0 +1,36 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TuneJS · Spatial playground</title>
+<style>body{max-width:760px;margin:60px auto;padding:0 24px;background:#f6f3eb;color:#242a24;font:18px/1.6 system-ui}h1{font-size:52px;letter-spacing:-2px;margin-bottom:0}button{font:inherit;padding:10px 20px;border:1px solid #647263;background:#fff;border-radius:4px;margin:6px 8px 6px 0;cursor:pointer}button:focus-visible{outline:3px solid #27784a}label{display:block;margin:20px 0}input{width:240px;vertical-align:middle}pre{white-space:pre-wrap;font-size:13px;background:#e8ece2;padding:18px;overflow-wrap:anywhere}small{color:#465446}</style>
+<script type="importmap">{"imports":{"tunejs":"/dist/index.js","tunejs/browser":"/dist/adapters/browser.js","tunejs/presets":"/dist/presets.js"}}</script>
+<h1>TuneJS</h1><p>Four emitters orbit the listener in stereo.</p>
+<small>Spatial development snapshot · pluck voices through tunejs-stereo-v1 distance/pan</small>
+<p><button id="start">Start</button><button id="stop">Stop</button><button id="orbit">Orbit: off</button></p>
+<label>Rotate listener <input id="rotate" type="range" min="-180" max="180" value="0"> <output id="deg">0°</output></label>
+<p id="status" role="status">Idle. Press Start to activate output.</p><pre id="diagnostics"></pre>
+<p><small>Stereo spatialization only — distance gain and equal-power pan, no binaural HRTF yet. A running state does not confirm audible output.</small></p>
+<p><a href="/examples/browser/index.html">First-sound example</a> · <a href="/examples/browser/loop.html">Living loop example</a></p>
+<script type="module">
+import { browserAdapter } from 'tunejs/browser';
+import { spatialPlayground } from '/examples/shared/spatial-playground.js';
+const scene = spatialPlayground(browserAdapter());
+const status = document.querySelector('#status');
+let orbiting = false, frame = 0;
+function report() {
+  const emitters = scene.emitters.map((emitter, i) => {
+    const p = emitter.source.position;
+    return `${i}: (${p.x.toFixed(2)}, ${p.z.toFixed(2)})`;
+  });
+  document.querySelector('#diagnostics').textContent = JSON.stringify({ ...scene.transport.diagnostics, emitters }, null, 2);
+}
+function failure(error) { status.textContent = `${error.code ?? error.name}: ${error.message} ${error.recovery ?? ''}`; report(); }
+const tick = time => { if (orbiting) { scene.move(time / 1000); report(); } frame = requestAnimationFrame(tick); };
+frame = requestAnimationFrame(tick);
+document.querySelector('#start').onclick = async () => { try { await scene.start(); status.textContent = scene.transport.state; report(); } catch(error) { failure(error); } };
+document.querySelector('#stop').onclick = () => { try { scene.stop(); status.textContent = scene.transport.state; report(); } catch(error) { failure(error); } };
+document.querySelector('#orbit').onclick = event => { orbiting = !orbiting; event.target.textContent = `Orbit: ${orbiting ? 'on' : 'off'}`; };
+document.querySelector('#rotate').oninput = event => { try { scene.rotateListener(+event.target.value * Math.PI / 180); document.querySelector('#deg').textContent = `${event.target.value}°`; report(); } catch(error) { failure(error); } };
+const hidden = () => { if (document.hidden && scene.engine.state !== 'disposed') scene.engine.suspend().catch(failure); };
+document.addEventListener('visibilitychange', hidden);
+window.addEventListener('pagehide', () => { cancelAnimationFrame(frame); document.removeEventListener('visibilitychange', hidden); scene.dispose().catch(failure); }, { once: true });
+report();
+</script></html>

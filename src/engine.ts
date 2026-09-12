@@ -12,6 +12,8 @@ import { Kit } from './kit.js';
 import type { KitPreset } from './kit.js';
 import { Pattern, Transport } from './transport.js';
 import type { PatternData } from './transport.js';
+import { Listener, SpatialSource } from './spatial.js';
+import type { SpatialSourceOptions } from './spatial.js';
 import type { HostBuffer, HostGain } from './backend.js';
 export type EngineState = 'idle' | 'starting' | 'running' | 'suspended' | 'interrupted' | 'failed' | 'disposed';
 
@@ -20,6 +22,8 @@ export class Engine {
   /** @internal */ readonly voices = new Set<OwnedVoice>();
   readonly output: GraphNode;
   readonly transport: Transport;
+  readonly listener: Listener;
+  /** @internal */ readonly spatial = new Set<SpatialSource>();
   /** @internal */ readonly adapter: Adapter;
   #context?: HostContext;
   #master?: HostGain;
@@ -32,8 +36,9 @@ export class Engine {
   constructor(options: { adapter: Adapter }) {
     this.adapter = options.adapter; this.output = new GraphNode(this, 'output'); this.nodes.add(this.output);
     this.transport = new Transport(this);
+    this.listener = new Listener(this);
     const fanOut = this.adapter.hostLimits.fanOut;
-    this.capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, kits: true, transport: true, patterns: true, fanOut, delay: fanOut, reverb: fanOut, spatial: false, capture: false, projects: false, offline: false, backgroundPlayback: false });
+    this.capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, kits: true, transport: true, patterns: true, fanOut, delay: fanOut, reverb: fanOut, spatial: true, binaural: false, stereoSpatial: true, capture: false, projects: false, offline: false, backgroundPlayback: false });
   }
   get state(): EngineState {
     if (this.#state === 'running' && this.#context?.state !== 'running') return this.#context?.state === 'suspended' ? 'suspended' : 'interrupted';
@@ -114,6 +119,13 @@ export class Engine {
   }
   gain(options: { gain?: number } = {}): Gain { this.assertAlive(); return this.add(new Gain(this, options.gain ?? 0.1)); }
   pattern(data: PatternData): Pattern { this.assertAlive(); return new Pattern(data); }
+  async spatialSource(options: SpatialSourceOptions): Promise<SpatialSource> {
+    this.assertAlive();
+    const source = this.add(new SpatialSource(this, options));
+    this.spatial.add(source);
+    source.evaluate(0);
+    return source;
+  }
   filter(options: { type?: 'lowpass' | 'highpass'; frequencyHz?: number } = {}): Filter {
     this.assertAlive(); const type = options.type ?? 'lowpass';
     if (type !== 'lowpass' && type !== 'highpass') throw new TuneError('INVALID_VALUE', 'Unknown filter type.', 'Use lowpass or highpass.');

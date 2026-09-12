@@ -55,7 +55,7 @@ export class GraphNode {
   /** @internal */ host?: HostNode;
   /** @internal */ readonly targets = new Set<GraphNode>();
   #disposed = false;
-  /** @internal */ constructor(readonly engine: Engine, readonly kind: 'source' | 'gain' | 'filter' | 'bus' | 'pan' | 'delay' | 'reverb' | 'output') {}
+  /** @internal */ constructor(readonly engine: Engine, readonly kind: 'source' | 'gain' | 'filter' | 'bus' | 'pan' | 'delay' | 'reverb' | 'spatial' | 'output') {}
   /** @internal */ assertAlive(): void {
     this.engine.assertAlive();
     if (this.#disposed) throw new TuneError('DISPOSED', `${this.kind} is disposed.`, 'Create a new graph object.');

@@ -1,0 +1,22 @@
+{
+  "fixtureVersion": 5,
+  "hosts": {
+    "browser": "headless Google Chrome, OfflineAudioContext — all 18 kind/rate results pass (delayonly, fanout, fanin error 0)",
+    "ios": "iPhone 17 Pro simulator, iOS 26.5, RN 0.86.3, RN Audio API 0.13.3, Release; three launches",
+    "android": "emulator dosekeep_api35 (API 35, arm64-v8a), same versions, Release APK; three launches"
+  },
+  "probes": {
+    "delayonly": {"expected": "impulse value 1 at frame D (441 @44.1 kHz, 480 @48 kHz)", "native": "impulse value 1 at frame 0 on every launch, both platforms, both rates", "reading": "DelayNode applies zero delay in the native OfflineAudioContext. Deterministic."},
+    "fanout": {"expected": "1.5 at frame 0 (source → gain 1 → destination, source → gain 0.5 → destination)", "native": "0.5 at frame 0 on every launch", "reading": "Only the path connected last reached the output."},
+    "fanin": {"expected": "2 at frame 0 (two impulse sources → destination)", "native": "1 at frame 0 on every launch", "reading": "The destination delivered one input, not the sum."},
+    "delay": {"expected": "1, 0.5, 0.25, 0.125 at 0, D, 2D, 3D", "native": "single impulse at frame 0 valued 0.125 or 0.25; repeatError 0.125 on some launches", "reading": "Consistent with zero delay plus one surviving destination input whose identity varies with graph-event ordering."},
+    "convolver": {"fit": {"44100": [{"lagFrames": 0, "scale": 0.9983120965527834, "residual": 0.0267531772153341}, {"lagFrames": 0, "scale": 0.9968112741837123, "residual": 0.0470310911630647}], "48000": [{"lagFrames": 0, "scale": 0.9982331542698332, "residual": 0.02741830891024688}, {"lagFrames": 0, "scale": 0.9968226347087158, "residual": 0.04888490813483015}]}, "reading": "No lag; a 0.2–0.3% scale deficit; residual up to 4.9% of full scale remains after removing scale, identical on all six launches. The native convolver is repeatable but not a sample-exact convolution of the supplied response."}
+  },
+  "contrast": "The fixture-version-2/3 timing fixture fans twelve impulse sources into one GainNode and every impulse arrives on native, so fan-in into a GainNode is not affected. Fan-in into the destination and fan-out from a source toward the destination are.",
+  "conclusions": [
+    "Native OfflineAudioContext DelayNode is unusable for TuneJS effects (zero delay); the feedforward Delay effect and any delay-based binaural cue are browser-only until the host changes.",
+    "Multiple connections into engine.output are unsafe on native. TuneJS will own a unity master GainNode as the output host with a single edge to the destination; a fixture-version-6 probe (fan-in and fan-out summed through a GainNode) must pass natively before that is relied on.",
+    "Native convolution differs from the browser by up to 4.9% of full scale; reverb output is host-dependent. Offline rendering (Wave 7) must not assume host-convolver equality across platforms.",
+    "All findings are OfflineAudioContext measurements on a simulator and an emulator; live AudioContext behavior on devices is unmeasured."
+  ]
+}

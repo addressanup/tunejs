@@ -66,6 +66,41 @@ export function decodeWav(bytes: ArrayBuffer | ArrayBufferView): DecodedWav {
   return { sampleRate, channels: out, frames };
 }
 
+// RIFF/WAVE encoder: PCM tag 1, 16-bit little-endian, interleaved. Values are scaled by 32768 and
+// clamped into range; `clippedSamples` counts samples whose absolute value exceeded 1.
+export function encodeWav(channels: Float32Array[], sampleRate: number): { bytes: ArrayBuffer; clippedSamples: number } {
+  finite(sampleRate, 1000, 384000, 'sample rate');
+  if (!channels.length) throw new TuneError('INVALID_VALUE', 'encodeWav requires at least one channel.', 'Pass a nonempty channel list.');
+  const frames = channels[0]!.length;
+  for (const channel of channels) {
+    if (channel.length !== frames) throw new TuneError('INVALID_VALUE', 'All channels must have equal lengths.', 'Encode channels of the same frame count.');
+    for (let i = 0; i < frames; i++) {
+      if (!Number.isFinite(channel[i])) throw new TuneError('INVALID_VALUE', 'Samples must be finite numbers.', 'Remove NaN or infinite values before encoding.');
+    }
+  }
+  const channelCount = channels.length;
+  const dataSize = frames * channelCount * 2;
+  const bytes = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(bytes);
+  const ascii = (offset: number, text: string) => { for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i)); };
+  ascii(0, 'RIFF'); view.setUint32(4, 36 + dataSize, true); ascii(8, 'WAVE');
+  ascii(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, channelCount, true);
+  view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * channelCount * 2, true);
+  view.setUint16(32, channelCount * 2, true); view.setUint16(34, 16, true);
+  ascii(36, 'data'); view.setUint32(40, dataSize, true);
+  let clippedSamples = 0;
+  let p = 44;
+  for (let frame = 0; frame < frames; frame++) {
+    for (let channel = 0; channel < channelCount; channel++) {
+      const value = channels[channel]![frame]!;
+      if (Math.abs(value) > 1) clippedSamples++;
+      view.setInt16(p, Math.max(-32768, Math.min(32767, Math.round(value * 32768))), true);
+      p += 2;
+    }
+  }
+  return { bytes, clippedSamples };
+}
+
 const besselI0 = (x: number): number => {
   let sum = 1, term = 1;
   const x2 = (x / 2) * (x / 2);

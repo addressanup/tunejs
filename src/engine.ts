@@ -14,6 +14,8 @@ import { Pattern, Transport } from './transport.js';
 import type { PatternData } from './transport.js';
 import { Listener, SpatialSource } from './spatial.js';
 import type { SpatialSourceOptions } from './spatial.js';
+import { Input, Meter, Recorder, Tap } from './capture.js';
+import type { MeterTimers } from './capture.js';
 import type { HostBuffer, HostGain } from './backend.js';
 export type EngineState = 'idle' | 'starting' | 'running' | 'suspended' | 'interrupted' | 'failed' | 'disposed';
 
@@ -24,6 +26,7 @@ export class Engine {
   readonly transport: Transport;
   readonly listener: Listener;
   /** @internal */ readonly spatial = new Set<SpatialSource>();
+  /** @internal */ readonly taps = new Set<Tap>();
   /** @internal */ readonly adapter: Adapter;
   #context?: HostContext;
   #master?: HostGain;
@@ -38,7 +41,7 @@ export class Engine {
     this.transport = new Transport(this);
     this.listener = new Listener(this);
     const fanOut = this.adapter.hostLimits.fanOut;
-    this.capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, kits: true, transport: true, patterns: true, fanOut, delay: fanOut, reverb: fanOut, spatial: true, binaural: false, stereoSpatial: true, capture: false, projects: false, offline: false, backgroundPlayback: false });
+    this.capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, kits: true, transport: true, patterns: true, fanOut, delay: fanOut, reverb: fanOut, spatial: true, binaural: false, stereoSpatial: true, taps: !!this.adapter.tapping, capture: !!this.adapter.capture, recorder: !!this.adapter.tapping, meters: !!this.adapter.tapping, projects: false, offline: false, backgroundPlayback: false });
   }
   get state(): EngineState {
     if (this.#state === 'running' && this.#context?.state !== 'running') return this.#context?.state === 'suspended' ? 'suspended' : 'interrupted';
@@ -49,7 +52,7 @@ export class Engine {
   get currentFrame(): number { return this.#context ? Math.round(this.#context.currentTime * this.#context.sampleRate) : 0; }
   /** @internal */ hostTimeAt(frame: number): number { return this.adapter.hostTime(integerFrame(frame, 'frame'), this.#context!.sampleRate); }
   get diagnostics() {
-    return { state: this.state, backend: this.adapter.name, sampleRate: this.#context?.sampleRate ?? null, nodes: this.nodes.size, voices: this.voices.size, cachedAssetBytes: [...this.#assets.values()].reduce((bytes, entry) => bytes + entry.decoded.channels.reduce((total, channel) => total + channel.length, 0) * 4, 0), taps: 0, underruns: null, outputLatencySeconds: null };
+    return { state: this.state, backend: this.adapter.name, sampleRate: this.#context?.sampleRate ?? null, nodes: this.nodes.size, voices: this.voices.size, cachedAssetBytes: [...this.#assets.values()].reduce((bytes, entry) => bytes + entry.decoded.channels.reduce((total, channel) => total + channel.length, 0) * 4, 0), taps: this.taps.size, underruns: null, outputLatencySeconds: null };
   }
   readonly capabilities;
   /** @internal */ assertAlive(): void { if (this.#state === 'disposed') throw new TuneError('DISPOSED', 'Engine is disposed.', 'Create a new engine.'); }
@@ -119,6 +122,65 @@ export class Engine {
   }
   gain(options: { gain?: number } = {}): Gain { this.assertAlive(); return this.add(new Gain(this, options.gain ?? 0.1)); }
   pattern(data: PatternData): Pattern { this.assertAlive(); return new Pattern(data); }
+  async tap(options: { source: GraphNode; chunkFrames?: number; maxBufferedFrames?: number }): Promise<Tap> {
+    const context = this.runningContext();
+    const source = options?.source;
+    if (!(source instanceof GraphNode)) throw new TuneError('INVALID_VALUE', 'tap requires a graph node source.', 'Pass a node created by this engine.');
+    if (source.engine !== this) throw new TuneError('CROSS_ENGINE', 'Tap source belongs to another engine.', 'Create the tap on the engine that owns the source.');
+    if (source === this.output) throw new TuneError('INVALID_CONNECTION', 'The output node cannot be tapped.', 'Tap a node upstream of the output.');
+    const chunkFrames = integerFrame(finite(options.chunkFrames ?? 1024, 128, 16384, 'chunk frames'), 'chunk frames');
+    if (chunkFrames % 128 !== 0) throw new TuneError('INVALID_VALUE', 'chunkFrames must be a multiple of 128.', 'Use a render-quantum multiple such as 1024.');
+    const maxBufferedFrames = options.maxBufferedFrames ?? Math.ceil(context.sampleRate / chunkFrames) * chunkFrames;
+    if (maxBufferedFrames < chunkFrames) throw new TuneError('INVALID_VALUE', 'maxBufferedFrames must hold at least one chunk.', 'Raise maxBufferedFrames to at least chunkFrames.');
+    if (!this.adapter.tapping) throw new TuneError('UNSUPPORTED', 'This host does not provide PCM taps.', 'Use the browser adapter, or wait for native tap support.');
+    let hostTap;
+    try { hostTap = await this.adapter.tapping.createTap(context, { chunkFrames, inFlightChunks: Math.ceil(maxBufferedFrames / chunkFrames) }); }
+    catch (cause) {
+      if (cause instanceof TuneError) throw cause;
+      throw new TuneError('HOST_FAILURE', 'The host could not create the tap.', 'Check AudioWorklet availability, then retry.', { cause });
+    }
+    const tap = new Tap(this, source, hostTap, chunkFrames, maxBufferedFrames);
+    source.host!.connect(hostTap);
+    this.taps.add(tap);
+    return tap;
+  }
+  async input(options: { kind: 'microphone' }, request: { signal?: AbortSignal } = {}): Promise<Input> {
+    const context = this.runningContext();
+    if (options?.kind !== 'microphone') throw new TuneError('INVALID_VALUE', 'input requires a known kind.', "Use { kind: 'microphone' }.");
+    if (!this.adapter.capture) throw new TuneError('UNSUPPORTED', 'This host does not provide microphone capture.', 'Use the browser adapter, or wait for native capture support.');
+    if (request.signal?.aborted) throw new TuneError('CANCELLED', 'The input request was aborted.', 'Retry without an aborted signal.');
+    let capture;
+    try { capture = await this.adapter.capture(context, { kind: 'microphone', signal: request.signal }); }
+    catch (cause) {
+      if (cause instanceof TuneError) throw cause;
+      const name = cause instanceof Error ? cause.name : '';
+      if (name === 'NotAllowedError' || name === 'SecurityError') throw new TuneError('PERMISSION_DENIED', 'Microphone permission was denied.', 'Grant microphone access in the browser or system settings.', { cause });
+      if (name === 'NotFoundError' || name === 'OverconstrainedError' || name === 'NotReadableError') throw new TuneError('NO_DEVICE', 'No usable microphone was found.', 'Connect or enable a microphone, then retry.', { cause });
+      if (name === 'AbortError' || request.signal?.aborted) throw new TuneError('CANCELLED', 'The input request was aborted.', 'Retry without an aborted signal.', { cause });
+      throw new TuneError('HOST_FAILURE', 'The host could not open the microphone.', 'Check the device and permission settings, then retry.', { cause });
+    }
+    const input = new Input(this, capture);
+    try { this.add(input); }
+    catch (cause) { try { capture.stop(); } catch { /* best effort */ } throw cause; }
+    return input;
+  }
+  recorder(options: { source: GraphNode; maxSeconds?: number; maxBufferedFrames?: number }): Recorder {
+    this.assertAlive();
+    const maxSeconds = options?.maxSeconds ?? 60;
+    finite(maxSeconds, 0, 600, 'max seconds');
+    if (maxSeconds <= 0) throw new TuneError('INVALID_VALUE', 'maxSeconds must exceed zero.', 'Choose a positive limit.');
+    return new Recorder(this, options.source, maxSeconds, options.maxBufferedFrames);
+  }
+  async meter(options: { source: GraphNode; updatesPerSecond?: number }, request: { timers?: MeterTimers } = {}): Promise<Meter> {
+    const updatesPerSecond = options?.updatesPerSecond ?? 30;
+    if (!Number.isInteger(updatesPerSecond) || updatesPerSecond < 1 || updatesPerSecond > 60) throw new TuneError('INVALID_VALUE', 'updatesPerSecond must be an integer in [1, 60].', 'Choose a meter rate between 1 and 60 Hz.');
+    const meter = new Meter(this, options.source, updatesPerSecond, request.timers);
+    meter.attach(await this.tap({ source: options.source, chunkFrames: 1024 }));
+    return meter;
+  }
+  /** @internal */ endTapsFor(node: GraphNode): void {
+    for (const tap of [...this.taps]) if (tap.source === node) tap.endBy('source-disposed');
+  }
   async spatialSource(options: SpatialSourceOptions): Promise<SpatialSource> {
     this.assertAlive();
     const source = this.add(new SpatialSource(this, options));
@@ -247,6 +309,7 @@ export class Engine {
     this.#master = undefined;
     this.output.host = undefined;
     this.transport.dispose();
+    for (const tap of [...this.taps]) try { tap.endBy('engine-disposed'); } catch { /* teardown best effort */ }
     this.#disposing = (async () => {
       const errors: unknown[] = [];
       for (const voice of [...this.voices]) try { voice.dispose(); } catch (error) { errors.push(error); }

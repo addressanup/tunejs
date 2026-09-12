@@ -99,6 +99,7 @@ export class GraphNode {
     this.host = undefined;
     this.targets.clear();
     this.engine.nodes.delete(this);
+    this.engine.endTapsFor(this);
     if (this instanceof Gain) this.gain.bind();
     if (this instanceof Filter) this.frequencyHz.bind();
     for (const node of this.engine.nodes) {

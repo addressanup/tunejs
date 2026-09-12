@@ -3,7 +3,8 @@
 // Version 3 adds an explicit scheduling conversion: `hostTime(frame, rate)` maps a target frame to the
 // seconds value handed to the host. The default is raw `frame / rate`; adapters may supply their own.
 // Version 4 adds the delay-chain and convolver-identity mixing fixtures (tolerance 1e-5, see below).
-export const fixtureVersion = 4;
+// Version 5 adds graph-topology probes (single delay, source fan-out, destination fan-in) and a convolver fit diagnostic.
+export const fixtureVersion = 5;
 export const rawSeconds = (frame, rate) => frame / rate;
 export const impulseFrames = [0, 127, 128, 129, 511, 1023, 1024, 8000, 16000, 24000, 32000, 40000];
 export function summarize(channels) {
@@ -72,10 +73,47 @@ export function convolverFixtureExpected(rate) {
   const frames=Math.round(convolverSeconds*rate);
   return convolverSeeds.map(seed=>{ const expected=new Float32Array(rate); expected.set(syntheticImpulseResponse(frames,seed)); return expected; });
 }
+// Version 5 topology probes isolate the native delay-chain failure: one DelayNode alone (impulse at D, value 1),
+// source fan-out to two gains (1 + 0.5 at frame 0), and two sources fanning directly into the destination (2 at frame 0).
+export const topologyKinds = ['delayonly','fanout','fanin'];
+export function topologyFixtureExpected(kind, rate) {
+  const expected=new Float32Array(rate);
+  if(kind==='delayonly') expected[Math.round(delayTapSeconds*rate)]=1;
+  else if(kind==='fanout') expected[0]=1.5;
+  else if(kind==='fanin') expected[0]=2;
+  else throw new RangeError(`Unknown topology fixture ${kind}.`);
+  return expected;
+}
+// Convolver fit: best scale and integer lag (±8 frames) between output and the supplied response, plus the residual
+// after removing them. Diagnostic only; the strict identity comparison decides the status.
+export function convolverFit(output, expected) {
+  let best=null;
+  for(let lag=-8;lag<=8;lag++) {
+    let dot=0, energy=0;
+    for(let i=0;i<expected.length;i++) { const j=i+lag; if(j<0||j>=output.length) continue; dot+=output[j]*expected[i]; energy+=expected[i]*expected[i]; }
+    const scale=energy?dot/energy:0;
+    let residual=0;
+    for(let i=0;i<expected.length;i++) { const j=i+lag; const value=j<0||j>=output.length?0:output[j]; residual=Math.max(residual,Math.abs(value-scale*expected[i])); }
+    if(!best || residual<best.residual) best={lagFrames:lag,scale,residual};
+  }
+  return best;
+}
 async function renderMixing(context, kind, rate, hostTime) {
   const impulse=context.createBuffer(1,1,rate); impulse.getChannelData(0)[0]=1;
   const source=context.createBufferSource(); source.buffer=impulse;
-  if(kind==='delay') {
+  if(kind==='delayonly') {
+    if(typeof context.createDelay!=='function') return { unavailable:'DelayNode absent' };
+    const D=Math.round(delayTapSeconds*rate);
+    const delay=context.createDelay(delayTapSeconds); delay.delayTime.setValueAtTime(D/rate,0);
+    source.connect(delay); delay.connect(context.destination);
+  } else if(kind==='fanout') {
+    const a=context.createGain(); a.gain.setValueAtTime(1,0); const b=context.createGain(); b.gain.setValueAtTime(0.5,0);
+    source.connect(a); source.connect(b); a.connect(context.destination); b.connect(context.destination);
+  } else if(kind==='fanin') {
+    const second=context.createBufferSource(); second.buffer=impulse;
+    source.connect(context.destination); second.connect(context.destination);
+    second.start(hostTime(0,rate));
+  } else if(kind==='delay') {
     if(typeof context.createDelay!=='function') return { unavailable:'DelayNode absent' };
     const D=Math.round(delayTapSeconds*rate);
     const dry=context.createGain(); dry.gain.setValueAtTime(1,0); source.connect(dry); dry.connect(context.destination);
@@ -101,7 +139,7 @@ export async function renderFixture(createOffline, kind, rate=48000, pan=-0.75, 
   if(typeof hostTime !== 'function') throw new TypeError('hostTime must be a function (frame, rate) => seconds.');
   const length = rate;
   const context = createOffline({ numberOfChannels: 2, length, sampleRate: rate });
-  if(kind === 'delay' || kind === 'convolver') return renderMixing(context, kind, rate, hostTime);
+  if(kind === 'delay' || kind === 'convolver' || topologyKinds.includes(kind)) return renderMixing(context, kind, rate, hostTime);
   const buffer = context.createBuffer(1, length, rate);
   const samples = buffer.getChannelData(0);
   if(kind === 'timing') { for(const frame of impulseFrames) samples[frame]=1; }
@@ -130,14 +168,14 @@ export async function runFixtures(createOffline, options={}) {
   const scheduling=options.scheduling ?? (options.hostTime ? 'custom' : 'raw-seconds');
   if(typeof hostTime !== 'function' || typeof scheduling !== 'string' || !scheduling) throw new TypeError('runFixtures options require a hostTime function and a nonempty scheduling label.');
   const results=[];
-  for(const rate of [44100,48000]) for(const kind of ['timing','filter','pan','hrtf','delay','convolver']) {
+  for(const rate of [44100,48000]) for(const kind of ['timing','filter','pan','hrtf','delay','convolver',...topologyKinds]) {
     try {
       const output=await renderFixture(createOffline,kind,rate,-0.75,hostTime);
       if(output.unavailable) { results.push({kind,rate,status:'unavailable',reason:output.unavailable}); continue; }
       const repeat=await renderFixture(createOffline,kind,rate,-0.75,hostTime);
       const stats=summarize(output.channels);
       const repeatError=Math.max(...output.channels.map((x,i)=>maxError(x,repeat.channels[i])));
-      let arithmeticError=null, mirrorError=null, observedOnsets=null, timing=null;
+      let arithmeticError=null, mirrorError=null, observedOnsets=null, timing=null, fit=null;
       if(kind==='timing') {
         const expected=new Float32Array(rate);
         for(const frame of impulseFrames) expected[frame]=0.25+0.25*Math.min(frame/1024,1);
@@ -161,10 +199,17 @@ export async function runFixtures(createOffline, options={}) {
       if(kind==='convolver') {
         const expected=convolverFixtureExpected(rate);
         arithmeticError=Math.max(...output.channels.map((x,i)=>maxError(x,expected[i])));
+        fit=output.channels.map((x,i)=>convolverFit(x,expected[i].subarray(0,Math.round(convolverSeconds*rate))));
+      }
+      if(topologyKinds.includes(kind)) {
+        const expected=topologyFixtureExpected(kind,rate);
+        arithmeticError=Math.max(...output.channels.map(x=>maxError(x,expected)));
+        observedOnsets=[];
+        for(let frame=0;frame<output.channels[0].length && observedOnsets.length<8;frame++) if(output.channels[0][frame]!==0) observedOnsets.push({frame,value:output.channels[0][frame]});
       }
       const pass=stats.every(x=>x.nonfinite===0 && x.peak>0) && repeatError<=1e-7 && (arithmeticError===null || arithmeticError<=1e-5) && (mirrorError===null || mirrorError<=1e-5);
-      results.push({kind,rate,status:pass?'pass':'fail',stats,repeatError,arithmeticError,mirrorError,observedOnsets,timing,renderMs:output.renderMs,
-        scope:kind==='hrtf'?'finite/nonzero/repeated fixed pose only; NOT localization/reference acceptance':kind==='filter'?'finite/repeatable smoke; NOT cross-backend reference acceptance':kind==='convolver'?'impulse-response identity through the host convolver; NOT a reverb quality judgement':'arithmetic fixture'});
+      results.push({kind,rate,status:pass?'pass':'fail',stats,repeatError,arithmeticError,mirrorError,observedOnsets,timing,fit,renderMs:output.renderMs,
+        scope:kind==='hrtf'?'finite/nonzero/repeated fixed pose only; NOT localization/reference acceptance':kind==='filter'?'finite/repeatable smoke; NOT cross-backend reference acceptance':kind==='convolver'?'impulse-response identity through the host convolver; NOT a reverb quality judgement':topologyKinds.includes(kind)?'graph topology probe':'arithmetic fixture'});
     } catch(error) { results.push({kind,rate,status:'error',error:String(error)}); }
   }
   return {fixtureVersion,scheduling,results};

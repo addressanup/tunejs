@@ -4,6 +4,8 @@ import { integerFrame } from '../errors.js';
 export function nativeAdapter(createContext: () => HostContext): Adapter {
   return {
     name: 'react-native-audio-api/0.13.3-experimental',
+    // Live probes measured only one outgoing connection per node reaching the graph.
+    hostLimits: { fanOut: false },
     createContext,
     // RN uses onEnded; browsers use onended. Do not silently lose voice cleanup.
     setEnded(node, callback) { Reflect.set(node, 'onEnded', callback); },

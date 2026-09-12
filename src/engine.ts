@@ -28,6 +28,8 @@ export class Engine {
   #disposing?: Promise<void>;
   constructor(options: { adapter: Adapter }) {
     this.adapter = options.adapter; this.output = new GraphNode(this, 'output'); this.nodes.add(this.output);
+    const fanOut = this.adapter.hostLimits.fanOut;
+    this.capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, kits: true, fanOut, delay: fanOut, reverb: fanOut, spatial: false, capture: false, projects: false, offline: false, backgroundPlayback: false });
   }
   get state(): EngineState {
     if (this.#state === 'running' && this.#context?.state !== 'running') return this.#context?.state === 'suspended' ? 'suspended' : 'interrupted';
@@ -40,7 +42,7 @@ export class Engine {
   get diagnostics() {
     return { state: this.state, backend: this.adapter.name, sampleRate: this.#context?.sampleRate ?? null, nodes: this.nodes.size, voices: this.voices.size, cachedAssetBytes: [...this.#assets.values()].reduce((bytes, entry) => bytes + entry.decoded.channels.reduce((total, channel) => total + channel.length, 0) * 4, 0), taps: 0, underruns: null, outputLatencySeconds: null };
   }
-  readonly capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, kits: true, spatial: false, capture: false, projects: false, offline: false, backgroundPlayback: false });
+  readonly capabilities;
   /** @internal */ assertAlive(): void { if (this.#state === 'disposed') throw new TuneError('DISPOSED', 'Engine is disposed.', 'Create a new engine.'); }
   /** @internal */ runningContext(): HostContext {
     this.assertAlive();
@@ -192,10 +194,12 @@ export class Engine {
   }
   delay(options: { time?: Seconds; feedback?: number; mix?: number; taps?: number } = {}): Delay {
     this.assertAlive();
+    if (!this.adapter.hostLimits.fanOut) throw new TuneError('UNSUPPORTED', 'Parallel wet/dry effects are unsupported on this host.', 'Use the browser adapter, or wait for the TuneJS DSP effect path.');
     return this.add(new Delay(this, options));
   }
   reverb(options: { decay?: Seconds; mix?: number } = {}): Reverb {
     this.assertAlive();
+    if (!this.adapter.hostLimits.fanOut) throw new TuneError('UNSUPPORTED', 'Parallel wet/dry effects are unsupported on this host.', 'Use the browser adapter, or wait for the TuneJS DSP effect path.');
     return this.add(new Reverb(this, options));
   }
   clearAssets(): number {

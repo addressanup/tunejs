@@ -19,7 +19,7 @@ function host() {
     createBuffer(channels,frames,rate){const b={sampleRate:rate,length:frames,numberOfChannels:channels,copies:[],copyToChannel(src,i){this.copies.push([i,src.length]);}};buffers.push(b);return b;},
     createBufferSource(){const events=[];const s={...mknode(),events,buffer:null,loop:false,loopStart:0,loopEnd:0,playbackRate:{...mkparam(events),events},starts:[],stops:[],start(...a){this.starts.push(a);},stop(t){this.stops.push(t);}};sources.push(s);return s;},
     async resume(){this.state='running';},async suspend(){this.state='suspended';},async close(){this.state='closed';}};
-  const adapter={name:'sample-test-double',createContext(){return context;},setEnded(node,fn){node.onEnded=fn;},hostTime(frame,rate){hostCalls.push([frame,rate]);return frame/rate;}};
+  const adapter={hostLimits:{fanOut:true},name:'sample-test-double',createContext(){return context;},setEnded(node,fn){node.onEnded=fn;},hostTime(frame,rate){hostCalls.push([frame,rate]);return frame/rate;}};
   return {engine:new Engine({adapter}),context,gains,buffers,sources,hostCalls};
 }
 const wav2s=()=>wav([new Float32Array(96000),new Float32Array(96000)],48000,'float32');

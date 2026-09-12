@@ -46,6 +46,8 @@ export interface HostContext {
 }
 export interface Adapter {
   readonly name: string;
+  /** `fanOut: false` means the host delivers only one outgoing connection per node (measured live on React Native Audio API 0.13.3, see docs/evidence/2026-09-12/live-probes). */
+  readonly hostLimits: { fanOut: boolean };
   createContext(): HostContext;
   setEnded(node: HostScheduledSource, callback: (() => void) | null): void;
   /** Seconds value at which this host's own time→frame conversion lands exactly on `frame`. */

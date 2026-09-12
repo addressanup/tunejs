@@ -1,0 +1,17 @@
+{
+  "liveProbeVersion": 2,
+  "method": "live AudioContext on the iPhone 17 Pro simulator (iOS 26.5) and the Android API 35 arm64 emulator, React Native 0.86.3 + React Native Audio API 0.13.3, Release builds; signals observed through an AnalyserNode (smoothing 0) with the audible path muted; two launches per platform, identical payloads; headless Chrome as control",
+  "results": {
+    "fanin-live": {"expected": 0.5, "browser": 0.5, "ios": 0.5, "android": 0.5, "reading": "two simultaneous constant sources into one GainNode are summed correctly on every host"},
+    "fanout-live": {"expected": 0.375, "browser": 0.375, "ios": 0.125, "android": 0.125, "reading": "a source connected to two gains (1 and 0.5) that reconverge delivers only the last-connected branch natively (0.25 × 0.5)"},
+    "fanout-gain-live": {"expected": 0.375, "browser": 0.375, "ios": 0.125, "android": 0.125, "reading": "the same defect when the branching node is a GainNode; fan-out from any node keeps one outgoing edge"},
+    "delay-live": {"expectedGapFrames": 480, "browser": {"gaps": [480, 3616, 480], "values": [1, 0.5]}, "ios": {"gaps": [480, 3616, 480], "values": [1, 0.5]}, "android": {"gaps": [480, 3616, 480], "values": [1, 0.5]}, "reading": "with two separate sources (no fan-out) the native live DelayNode delays exactly 480 frames; the offline zero-delay result is offline-only"}
+  },
+  "version1Note": "The version-1 delay probe (single source fanned out to dry and delayed paths) lost its dry impulses natively — values [0.5] only — which is the fan-out defect, not a delay defect. Retained as v1-native-results-*.json.",
+  "conclusions": [
+    "Live native graphs sum fan-in correctly, so polyphonic voices into one filter or bus are sound; native polyphony is not blocked.",
+    "Live native graphs deliver only one outgoing connection per node. Every parallel wet/dry structure (Delay, Reverb) and every user-level fan-out is broken on this host; the offline results were the same defect plus offline-only summation/delay failures.",
+    "The native live DelayNode works; the offline DelayNode does not. Native offline rendering through the host graph is unusable beyond single chains, so deterministic offline rendering must be TuneJS-owned.",
+    "Decision: declare fan-out as a host limit in the adapter, reject a second outgoing connection and the wet/dry effects on such hosts with UNSUPPORTED (no silent substitution), and plan a TuneJS-owned single-node DSP path (worklet-based, shared JS DSP) for effects, spatial rendering and offline rendering."
+  ]
+}

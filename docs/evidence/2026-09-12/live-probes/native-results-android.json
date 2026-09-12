@@ -1,0 +1,2114 @@
+{
+  "date": "2026-09-12T15:01:54.134Z",
+  "platform": "android",
+  "version": 35,
+  "rn": {
+    "minor": 86,
+    "prerelease": null,
+    "patch": 3,
+    "major": 0
+  },
+  "scope": "release simulator offline PCM; no physical-device validation",
+  "fixtureVersion": 6,
+  "scheduling": "raw-seconds",
+  "results": [
+    {
+      "kind": "timing",
+      "rate": 44100,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.007046587308671112,
+          "peak": 0.5,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.007046587308671112,
+          "peak": 0.5,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 0.499755859375,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 0.25
+        },
+        {
+          "frame": 127,
+          "value": 0.281005859375
+        },
+        {
+          "frame": 128,
+          "value": 0.28125
+        },
+        {
+          "frame": 129,
+          "value": 0.281494140625
+        },
+        {
+          "frame": 511,
+          "value": 0.374755859375
+        },
+        {
+          "frame": 1022,
+          "value": 0.49951171875
+        },
+        {
+          "frame": 1024,
+          "value": 0.5
+        },
+        {
+          "frame": 8000,
+          "value": 0.5
+        },
+        {
+          "frame": 16000,
+          "value": 0.5
+        },
+        {
+          "frame": 24000,
+          "value": 0.5
+        },
+        {
+          "frame": 32000,
+          "value": 0.5
+        },
+        {
+          "frame": 40000,
+          "value": 0.5
+        }
+      ],
+      "timing": {
+        "onsetStatus": "pass",
+        "toleranceFrames": 1,
+        "channels": [
+          {
+            "expectedCount": 12,
+            "observedCount": 12,
+            "observedOnsets": [
+              {
+                "frame": 0,
+                "value": 0.25
+              },
+              {
+                "frame": 127,
+                "value": 0.281005859375
+              },
+              {
+                "frame": 128,
+                "value": 0.28125
+              },
+              {
+                "frame": 129,
+                "value": 0.281494140625
+              },
+              {
+                "frame": 511,
+                "value": 0.374755859375
+              },
+              {
+                "frame": 1022,
+                "value": 0.49951171875
+              },
+              {
+                "frame": 1024,
+                "value": 0.5
+              },
+              {
+                "frame": 8000,
+                "value": 0.5
+              },
+              {
+                "frame": 16000,
+                "value": 0.5
+              },
+              {
+                "frame": 24000,
+                "value": 0.5
+              },
+              {
+                "frame": 32000,
+                "value": 0.5
+              },
+              {
+                "frame": 40000,
+                "value": 0.5
+              }
+            ],
+            "frameOffsets": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              -1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "maxOnsetErrorFrames": 1,
+            "gainErrorAtActualOnset": 0
+          },
+          {
+            "expectedCount": 12,
+            "observedCount": 12,
+            "observedOnsets": [
+              {
+                "frame": 0,
+                "value": 0.25
+              },
+              {
+                "frame": 127,
+                "value": 0.281005859375
+              },
+              {
+                "frame": 128,
+                "value": 0.28125
+              },
+              {
+                "frame": 129,
+                "value": 0.281494140625
+              },
+              {
+                "frame": 511,
+                "value": 0.374755859375
+              },
+              {
+                "frame": 1022,
+                "value": 0.49951171875
+              },
+              {
+                "frame": 1024,
+                "value": 0.5
+              },
+              {
+                "frame": 8000,
+                "value": 0.5
+              },
+              {
+                "frame": 16000,
+                "value": 0.5
+              },
+              {
+                "frame": 24000,
+                "value": 0.5
+              },
+              {
+                "frame": 32000,
+                "value": 0.5
+              },
+              {
+                "frame": 40000,
+                "value": 0.5
+              }
+            ],
+            "frameOffsets": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              -1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "maxOnsetErrorFrames": 1,
+            "gainErrorAtActualOnset": 0
+          }
+        ]
+      },
+      "fit": null,
+      "renderMs": 9.824999999254942,
+      "scope": "arithmetic fixture"
+    },
+    {
+      "kind": "filter",
+      "rate": 44100,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.1876303381942937,
+          "peak": 0.2684236168861389,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.1876303381942937,
+          "peak": 0.2684236168861389,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": null,
+      "mirrorError": null,
+      "observedOnsets": null,
+      "timing": null,
+      "fit": null,
+      "renderMs": 1.2793329991400242,
+      "scope": "finite/repeatable smoke; NOT cross-backend reference acceptance"
+    },
+    {
+      "kind": "pan",
+      "rate": 44100,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.1733799756405835,
+          "peak": 0.24519610404968262,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.034487422673967705,
+          "peak": 0.04877253994345665,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 1.4901161193847656e-8,
+      "mirrorError": 1.4901161193847656e-8,
+      "observedOnsets": null,
+      "timing": null,
+      "fit": null,
+      "renderMs": 1.2346660010516644,
+      "scope": "arithmetic fixture"
+    },
+    {
+      "kind": "hrtf",
+      "rate": 44100,
+      "status": "unavailable",
+      "reason": "PannerNode/AudioListener absent"
+    },
+    {
+      "kind": "delay",
+      "rate": 44100,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.0005952380952380953,
+          "peak": 0.125,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.0005952380952380953,
+          "peak": 0.125,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0.125,
+      "arithmeticError": 0.875,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 0.125
+        }
+      ],
+      "timing": null,
+      "fit": null,
+      "renderMs": 0.44275000132620335,
+      "scope": "arithmetic fixture"
+    },
+    {
+      "kind": "convolver",
+      "rate": 44100,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.07869936292431996,
+          "peak": 0.9920563697814941,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.07741929499217483,
+          "peak": 0.9447327852249146,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 0.04513469338417053,
+      "mirrorError": null,
+      "observedOnsets": null,
+      "timing": null,
+      "fit": [
+        {
+          "lagFrames": 0,
+          "scale": 0.9983120965527834,
+          "residual": 0.0267531772153341
+        },
+        {
+          "lagFrames": 0,
+          "scale": 0.9968112741837123,
+          "residual": 0.0470310911630647
+        }
+      ],
+      "renderMs": 16.45333299972117,
+      "scope": "impulse-response identity through the host convolver; NOT a reverb quality judgement"
+    },
+    {
+      "kind": "delayonly",
+      "rate": 44100,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.004761904761904762,
+          "peak": 1,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.004761904761904762,
+          "peak": 1,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 1,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 1
+        }
+      ],
+      "timing": null,
+      "fit": null,
+      "renderMs": 0.4292920008301735,
+      "scope": "graph topology probe"
+    },
+    {
+      "kind": "fanout",
+      "rate": 44100,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.002380952380952381,
+          "peak": 0.5,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.002380952380952381,
+          "peak": 0.5,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 1,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 0.5
+        }
+      ],
+      "timing": null,
+      "fit": null,
+      "renderMs": 0.9616249985992908,
+      "scope": "graph topology probe"
+    },
+    {
+      "kind": "fanin",
+      "rate": 44100,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.004761904761904762,
+          "peak": 1,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.004761904761904762,
+          "peak": 1,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 1,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 1
+        }
+      ],
+      "timing": null,
+      "fit": null,
+      "renderMs": 0.6502919998019934,
+      "scope": "graph topology probe"
+    },
+    {
+      "kind": "fanout-gain",
+      "rate": 44100,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.002380952380952381,
+          "peak": 0.5,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.002380952380952381,
+          "peak": 0.5,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 1,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 0.5
+        }
+      ],
+      "timing": null,
+      "fit": null,
+      "renderMs": 0.6678329985588789,
+      "scope": "graph topology probe"
+    },
+    {
+      "kind": "fanin-gain",
+      "rate": 44100,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 44100,
+          "rms": 0.004761904761904762,
+          "peak": 1,
+          "nonfinite": 0
+        },
+        {
+          "frames": 44100,
+          "rms": 0.004761904761904762,
+          "peak": 1,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 1,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 1
+        }
+      ],
+      "timing": null,
+      "fit": null,
+      "renderMs": 0.5490419995039701,
+      "scope": "graph topology probe"
+    },
+    {
+      "kind": "timing",
+      "rate": 48000,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.0067546321757505,
+          "peak": 0.5,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.0067546321757505,
+          "peak": 0.5,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 0,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 0.25
+        },
+        {
+          "frame": 127,
+          "value": 0.281005859375
+        },
+        {
+          "frame": 128,
+          "value": 0.28125
+        },
+        {
+          "frame": 129,
+          "value": 0.281494140625
+        },
+        {
+          "frame": 511,
+          "value": 0.374755859375
+        },
+        {
+          "frame": 1023,
+          "value": 0.499755859375
+        },
+        {
+          "frame": 1024,
+          "value": 0.5
+        },
+        {
+          "frame": 8000,
+          "value": 0.5
+        },
+        {
+          "frame": 16000,
+          "value": 0.5
+        },
+        {
+          "frame": 24000,
+          "value": 0.5
+        },
+        {
+          "frame": 32000,
+          "value": 0.5
+        },
+        {
+          "frame": 40000,
+          "value": 0.5
+        }
+      ],
+      "timing": {
+        "onsetStatus": "pass",
+        "toleranceFrames": 1,
+        "channels": [
+          {
+            "expectedCount": 12,
+            "observedCount": 12,
+            "observedOnsets": [
+              {
+                "frame": 0,
+                "value": 0.25
+              },
+              {
+                "frame": 127,
+                "value": 0.281005859375
+              },
+              {
+                "frame": 128,
+                "value": 0.28125
+              },
+              {
+                "frame": 129,
+                "value": 0.281494140625
+              },
+              {
+                "frame": 511,
+                "value": 0.374755859375
+              },
+              {
+                "frame": 1023,
+                "value": 0.499755859375
+              },
+              {
+                "frame": 1024,
+                "value": 0.5
+              },
+              {
+                "frame": 8000,
+                "value": 0.5
+              },
+              {
+                "frame": 16000,
+                "value": 0.5
+              },
+              {
+                "frame": 24000,
+                "value": 0.5
+              },
+              {
+                "frame": 32000,
+                "value": 0.5
+              },
+              {
+                "frame": 40000,
+                "value": 0.5
+              }
+            ],
+            "frameOffsets": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "maxOnsetErrorFrames": 0,
+            "gainErrorAtActualOnset": 0
+          },
+          {
+            "expectedCount": 12,
+            "observedCount": 12,
+            "observedOnsets": [
+              {
+                "frame": 0,
+                "value": 0.25
+              },
+              {
+                "frame": 127,
+                "value": 0.281005859375
+              },
+              {
+                "frame": 128,
+                "value": 0.28125
+              },
+              {
+                "frame": 129,
+                "value": 0.281494140625
+              },
+              {
+                "frame": 511,
+                "value": 0.374755859375
+              },
+              {
+                "frame": 1023,
+                "value": 0.499755859375
+              },
+              {
+                "frame": 1024,
+                "value": 0.5
+              },
+              {
+                "frame": 8000,
+                "value": 0.5
+              },
+              {
+                "frame": 16000,
+                "value": 0.5
+              },
+              {
+                "frame": 24000,
+                "value": 0.5
+              },
+              {
+                "frame": 32000,
+                "value": 0.5
+              },
+              {
+                "frame": 40000,
+                "value": 0.5
+              }
+            ],
+            "frameOffsets": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "maxOnsetErrorFrames": 0,
+            "gainErrorAtActualOnset": 0
+          }
+        ]
+      },
+      "fit": null,
+      "renderMs": 0.7607920002192259,
+      "scope": "arithmetic fixture"
+    },
+    {
+      "kind": "filter",
+      "rate": 48000,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.18763656197487819,
+          "peak": 0.2684943974018097,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.18763656197487819,
+          "peak": 0.2684943974018097,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": null,
+      "mirrorError": null,
+      "observedOnsets": null,
+      "timing": null,
+      "fit": null,
+      "renderMs": 1.3717500008642673,
+      "scope": "finite/repeatable smoke; NOT cross-backend reference acceptance"
+    },
+    {
+      "kind": "pan",
+      "rate": 48000,
+      "status": "pass",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.17337997511594494,
+          "peak": 0.24519631266593933,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.03448742266992635,
+          "peak": 0.04877258092164993,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 1.4901161193847656e-8,
+      "mirrorError": 1.4901161193847656e-8,
+      "observedOnsets": null,
+      "timing": null,
+      "fit": null,
+      "renderMs": 1.2370829991996288,
+      "scope": "arithmetic fixture"
+    },
+    {
+      "kind": "hrtf",
+      "rate": 48000,
+      "status": "unavailable",
+      "reason": "PannerNode/AudioListener absent"
+    },
+    {
+      "kind": "delay",
+      "rate": 48000,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.000570544330734548,
+          "peak": 0.125,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.000570544330734548,
+          "peak": 0.125,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0.125,
+      "arithmeticError": 0.875,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 0.125
+        }
+      ],
+      "timing": null,
+      "fit": null,
+      "renderMs": 0.5434590000659227,
+      "scope": "arithmetic fixture"
+    },
+    {
+      "kind": "convolver",
+      "rate": 48000,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.07862784837257072,
+          "peak": 0.9927051663398743,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.07743124345044829,
+          "peak": 0.9451406598091125,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 0.04691454768180847,
+      "mirrorError": null,
+      "observedOnsets": null,
+      "timing": null,
+      "fit": [
+        {
+          "lagFrames": 0,
+          "scale": 0.9982331542698332,
+          "residual": 0.02741830891024688
+        },
+        {
+          "lagFrames": 0,
+          "scale": 0.9968226347087158,
+          "residual": 0.04888490813483015
+        }
+      ],
+      "renderMs": 10.983916999772191,
+      "scope": "impulse-response identity through the host convolver; NOT a reverb quality judgement"
+    },
+    {
+      "kind": "delayonly",
+      "rate": 48000,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.004564354645876384,
+          "peak": 1,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.004564354645876384,
+          "peak": 1,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 1,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 1
+        }
+      ],
+      "timing": null,
+      "fit": null,
+      "renderMs": 3.56033300049603,
+      "scope": "graph topology probe"
+    },
+    {
+      "kind": "fanout",
+      "rate": 48000,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.002282177322938192,
+          "peak": 0.5,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.002282177322938192,
+          "peak": 0.5,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 1,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 0.5
+        }
+      ],
+      "timing": null,
+      "fit": null,
+      "renderMs": 2.3074169997125864,
+      "scope": "graph topology probe"
+    },
+    {
+      "kind": "fanin",
+      "rate": 48000,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.004564354645876384,
+          "peak": 1,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.004564354645876384,
+          "peak": 1,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 1,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 1
+        }
+      ],
+      "timing": null,
+      "fit": null,
+      "renderMs": 1.0685830004513264,
+      "scope": "graph topology probe"
+    },
+    {
+      "kind": "fanout-gain",
+      "rate": 48000,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.002282177322938192,
+          "peak": 0.5,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.002282177322938192,
+          "peak": 0.5,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 1,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 0.5
+        }
+      ],
+      "timing": null,
+      "fit": null,
+      "renderMs": 1.1340420003980398,
+      "scope": "graph topology probe"
+    },
+    {
+      "kind": "fanin-gain",
+      "rate": 48000,
+      "status": "fail",
+      "stats": [
+        {
+          "frames": 48000,
+          "rms": 0.004564354645876384,
+          "peak": 1,
+          "nonfinite": 0
+        },
+        {
+          "frames": 48000,
+          "rms": 0.004564354645876384,
+          "peak": 1,
+          "nonfinite": 0
+        }
+      ],
+      "repeatError": 0,
+      "arithmeticError": 1,
+      "mirrorError": null,
+      "observedOnsets": [
+        {
+          "frame": 0,
+          "value": 1
+        }
+      ],
+      "timing": null,
+      "fit": null,
+      "renderMs": 0.8598329983651638,
+      "scope": "graph topology probe"
+    }
+  ],
+  "adapterScheduled": {
+    "fixtureVersion": 6,
+    "scheduling": "native-adapter-frames",
+    "results": [
+      {
+        "kind": "timing",
+        "rate": 44100,
+        "status": "pass",
+        "stats": [
+          {
+            "frames": 44100,
+            "rms": 0.0070469798291595215,
+            "peak": 0.5,
+            "nonfinite": 0
+          },
+          {
+            "frames": 44100,
+            "rms": 0.0070469798291595215,
+            "peak": 0.5,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 0,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 0.25
+          },
+          {
+            "frame": 127,
+            "value": 0.281005859375
+          },
+          {
+            "frame": 128,
+            "value": 0.28125
+          },
+          {
+            "frame": 129,
+            "value": 0.281494140625
+          },
+          {
+            "frame": 511,
+            "value": 0.374755859375
+          },
+          {
+            "frame": 1023,
+            "value": 0.499755859375
+          },
+          {
+            "frame": 1024,
+            "value": 0.5
+          },
+          {
+            "frame": 8000,
+            "value": 0.5
+          },
+          {
+            "frame": 16000,
+            "value": 0.5
+          },
+          {
+            "frame": 24000,
+            "value": 0.5
+          },
+          {
+            "frame": 32000,
+            "value": 0.5
+          },
+          {
+            "frame": 40000,
+            "value": 0.5
+          }
+        ],
+        "timing": {
+          "onsetStatus": "pass",
+          "toleranceFrames": 1,
+          "channels": [
+            {
+              "expectedCount": 12,
+              "observedCount": 12,
+              "observedOnsets": [
+                {
+                  "frame": 0,
+                  "value": 0.25
+                },
+                {
+                  "frame": 127,
+                  "value": 0.281005859375
+                },
+                {
+                  "frame": 128,
+                  "value": 0.28125
+                },
+                {
+                  "frame": 129,
+                  "value": 0.281494140625
+                },
+                {
+                  "frame": 511,
+                  "value": 0.374755859375
+                },
+                {
+                  "frame": 1023,
+                  "value": 0.499755859375
+                },
+                {
+                  "frame": 1024,
+                  "value": 0.5
+                },
+                {
+                  "frame": 8000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 16000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 24000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 32000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 40000,
+                  "value": 0.5
+                }
+              ],
+              "frameOffsets": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "maxOnsetErrorFrames": 0,
+              "gainErrorAtActualOnset": 0
+            },
+            {
+              "expectedCount": 12,
+              "observedCount": 12,
+              "observedOnsets": [
+                {
+                  "frame": 0,
+                  "value": 0.25
+                },
+                {
+                  "frame": 127,
+                  "value": 0.281005859375
+                },
+                {
+                  "frame": 128,
+                  "value": 0.28125
+                },
+                {
+                  "frame": 129,
+                  "value": 0.281494140625
+                },
+                {
+                  "frame": 511,
+                  "value": 0.374755859375
+                },
+                {
+                  "frame": 1023,
+                  "value": 0.499755859375
+                },
+                {
+                  "frame": 1024,
+                  "value": 0.5
+                },
+                {
+                  "frame": 8000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 16000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 24000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 32000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 40000,
+                  "value": 0.5
+                }
+              ],
+              "frameOffsets": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "maxOnsetErrorFrames": 0,
+              "gainErrorAtActualOnset": 0
+            }
+          ]
+        },
+        "fit": null,
+        "renderMs": 1.2128330003470182,
+        "scope": "arithmetic fixture"
+      },
+      {
+        "kind": "filter",
+        "rate": 44100,
+        "status": "pass",
+        "stats": [
+          {
+            "frames": 44100,
+            "rms": 0.1876303381942937,
+            "peak": 0.2684236168861389,
+            "nonfinite": 0
+          },
+          {
+            "frames": 44100,
+            "rms": 0.1876303381942937,
+            "peak": 0.2684236168861389,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": null,
+        "mirrorError": null,
+        "observedOnsets": null,
+        "timing": null,
+        "fit": null,
+        "renderMs": 1.1590410005301237,
+        "scope": "finite/repeatable smoke; NOT cross-backend reference acceptance"
+      },
+      {
+        "kind": "pan",
+        "rate": 44100,
+        "status": "pass",
+        "stats": [
+          {
+            "frames": 44100,
+            "rms": 0.1733799756405835,
+            "peak": 0.24519610404968262,
+            "nonfinite": 0
+          },
+          {
+            "frames": 44100,
+            "rms": 0.034487422673967705,
+            "peak": 0.04877253994345665,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 1.4901161193847656e-8,
+        "mirrorError": 1.4901161193847656e-8,
+        "observedOnsets": null,
+        "timing": null,
+        "fit": null,
+        "renderMs": 1.4923750013113022,
+        "scope": "arithmetic fixture"
+      },
+      {
+        "kind": "hrtf",
+        "rate": 44100,
+        "status": "unavailable",
+        "reason": "PannerNode/AudioListener absent"
+      },
+      {
+        "kind": "delay",
+        "rate": 44100,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 44100,
+            "rms": 0.0005952380952380953,
+            "peak": 0.125,
+            "nonfinite": 0
+          },
+          {
+            "frames": 44100,
+            "rms": 0.0005952380952380953,
+            "peak": 0.125,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0.125,
+        "arithmeticError": 0.875,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 0.125
+          }
+        ],
+        "timing": null,
+        "fit": null,
+        "renderMs": 0.5322080012410879,
+        "scope": "arithmetic fixture"
+      },
+      {
+        "kind": "convolver",
+        "rate": 44100,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 44100,
+            "rms": 0.07869936292431996,
+            "peak": 0.9920563697814941,
+            "nonfinite": 0
+          },
+          {
+            "frames": 44100,
+            "rms": 0.07741929499217483,
+            "peak": 0.9447327852249146,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 0.04513469338417053,
+        "mirrorError": null,
+        "observedOnsets": null,
+        "timing": null,
+        "fit": [
+          {
+            "lagFrames": 0,
+            "scale": 0.9983120965527834,
+            "residual": 0.0267531772153341
+          },
+          {
+            "lagFrames": 0,
+            "scale": 0.9968112741837123,
+            "residual": 0.0470310911630647
+          }
+        ],
+        "renderMs": 13.913292000070214,
+        "scope": "impulse-response identity through the host convolver; NOT a reverb quality judgement"
+      },
+      {
+        "kind": "delayonly",
+        "rate": 44100,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 44100,
+            "rms": 0.004761904761904762,
+            "peak": 1,
+            "nonfinite": 0
+          },
+          {
+            "frames": 44100,
+            "rms": 0.004761904761904762,
+            "peak": 1,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 1,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 1
+          }
+        ],
+        "timing": null,
+        "fit": null,
+        "renderMs": 0.5897499993443489,
+        "scope": "graph topology probe"
+      },
+      {
+        "kind": "fanout",
+        "rate": 44100,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 44100,
+            "rms": 0.002380952380952381,
+            "peak": 0.5,
+            "nonfinite": 0
+          },
+          {
+            "frames": 44100,
+            "rms": 0.002380952380952381,
+            "peak": 0.5,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 1,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 0.5
+          }
+        ],
+        "timing": null,
+        "fit": null,
+        "renderMs": 0.44091599993407726,
+        "scope": "graph topology probe"
+      },
+      {
+        "kind": "fanin",
+        "rate": 44100,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 44100,
+            "rms": 0.004761904761904762,
+            "peak": 1,
+            "nonfinite": 0
+          },
+          {
+            "frames": 44100,
+            "rms": 0.004761904761904762,
+            "peak": 1,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 1,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 1
+          }
+        ],
+        "timing": null,
+        "fit": null,
+        "renderMs": 1.021790999919176,
+        "scope": "graph topology probe"
+      },
+      {
+        "kind": "fanout-gain",
+        "rate": 44100,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 44100,
+            "rms": 0.002380952380952381,
+            "peak": 0.5,
+            "nonfinite": 0
+          },
+          {
+            "frames": 44100,
+            "rms": 0.002380952380952381,
+            "peak": 0.5,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 1,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 0.5
+          }
+        ],
+        "timing": null,
+        "fit": null,
+        "renderMs": 0.420584000647068,
+        "scope": "graph topology probe"
+      },
+      {
+        "kind": "fanin-gain",
+        "rate": 44100,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 44100,
+            "rms": 0.004761904761904762,
+            "peak": 1,
+            "nonfinite": 0
+          },
+          {
+            "frames": 44100,
+            "rms": 0.004761904761904762,
+            "peak": 1,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 1,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 1
+          }
+        ],
+        "timing": null,
+        "fit": null,
+        "renderMs": 0.5278749987483025,
+        "scope": "graph topology probe"
+      },
+      {
+        "kind": "timing",
+        "rate": 48000,
+        "status": "pass",
+        "stats": [
+          {
+            "frames": 48000,
+            "rms": 0.0067546321757505,
+            "peak": 0.5,
+            "nonfinite": 0
+          },
+          {
+            "frames": 48000,
+            "rms": 0.0067546321757505,
+            "peak": 0.5,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 0,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 0.25
+          },
+          {
+            "frame": 127,
+            "value": 0.281005859375
+          },
+          {
+            "frame": 128,
+            "value": 0.28125
+          },
+          {
+            "frame": 129,
+            "value": 0.281494140625
+          },
+          {
+            "frame": 511,
+            "value": 0.374755859375
+          },
+          {
+            "frame": 1023,
+            "value": 0.499755859375
+          },
+          {
+            "frame": 1024,
+            "value": 0.5
+          },
+          {
+            "frame": 8000,
+            "value": 0.5
+          },
+          {
+            "frame": 16000,
+            "value": 0.5
+          },
+          {
+            "frame": 24000,
+            "value": 0.5
+          },
+          {
+            "frame": 32000,
+            "value": 0.5
+          },
+          {
+            "frame": 40000,
+            "value": 0.5
+          }
+        ],
+        "timing": {
+          "onsetStatus": "pass",
+          "toleranceFrames": 1,
+          "channels": [
+            {
+              "expectedCount": 12,
+              "observedCount": 12,
+              "observedOnsets": [
+                {
+                  "frame": 0,
+                  "value": 0.25
+                },
+                {
+                  "frame": 127,
+                  "value": 0.281005859375
+                },
+                {
+                  "frame": 128,
+                  "value": 0.28125
+                },
+                {
+                  "frame": 129,
+                  "value": 0.281494140625
+                },
+                {
+                  "frame": 511,
+                  "value": 0.374755859375
+                },
+                {
+                  "frame": 1023,
+                  "value": 0.499755859375
+                },
+                {
+                  "frame": 1024,
+                  "value": 0.5
+                },
+                {
+                  "frame": 8000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 16000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 24000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 32000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 40000,
+                  "value": 0.5
+                }
+              ],
+              "frameOffsets": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "maxOnsetErrorFrames": 0,
+              "gainErrorAtActualOnset": 0
+            },
+            {
+              "expectedCount": 12,
+              "observedCount": 12,
+              "observedOnsets": [
+                {
+                  "frame": 0,
+                  "value": 0.25
+                },
+                {
+                  "frame": 127,
+                  "value": 0.281005859375
+                },
+                {
+                  "frame": 128,
+                  "value": 0.28125
+                },
+                {
+                  "frame": 129,
+                  "value": 0.281494140625
+                },
+                {
+                  "frame": 511,
+                  "value": 0.374755859375
+                },
+                {
+                  "frame": 1023,
+                  "value": 0.499755859375
+                },
+                {
+                  "frame": 1024,
+                  "value": 0.5
+                },
+                {
+                  "frame": 8000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 16000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 24000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 32000,
+                  "value": 0.5
+                },
+                {
+                  "frame": 40000,
+                  "value": 0.5
+                }
+              ],
+              "frameOffsets": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "maxOnsetErrorFrames": 0,
+              "gainErrorAtActualOnset": 0
+            }
+          ]
+        },
+        "fit": null,
+        "renderMs": 0.8030000012367964,
+        "scope": "arithmetic fixture"
+      },
+      {
+        "kind": "filter",
+        "rate": 48000,
+        "status": "pass",
+        "stats": [
+          {
+            "frames": 48000,
+            "rms": 0.18763656197487819,
+            "peak": 0.2684943974018097,
+            "nonfinite": 0
+          },
+          {
+            "frames": 48000,
+            "rms": 0.18763656197487819,
+            "peak": 0.2684943974018097,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": null,
+        "mirrorError": null,
+        "observedOnsets": null,
+        "timing": null,
+        "fit": null,
+        "renderMs": 1.2319160010665655,
+        "scope": "finite/repeatable smoke; NOT cross-backend reference acceptance"
+      },
+      {
+        "kind": "pan",
+        "rate": 48000,
+        "status": "pass",
+        "stats": [
+          {
+            "frames": 48000,
+            "rms": 0.17337997511594494,
+            "peak": 0.24519631266593933,
+            "nonfinite": 0
+          },
+          {
+            "frames": 48000,
+            "rms": 0.03448742266992635,
+            "peak": 0.04877258092164993,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 1.4901161193847656e-8,
+        "mirrorError": 1.4901161193847656e-8,
+        "observedOnsets": null,
+        "timing": null,
+        "fit": null,
+        "renderMs": 1.4161249995231628,
+        "scope": "arithmetic fixture"
+      },
+      {
+        "kind": "hrtf",
+        "rate": 48000,
+        "status": "unavailable",
+        "reason": "PannerNode/AudioListener absent"
+      },
+      {
+        "kind": "delay",
+        "rate": 48000,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 48000,
+            "rms": 0.000570544330734548,
+            "peak": 0.125,
+            "nonfinite": 0
+          },
+          {
+            "frames": 48000,
+            "rms": 0.000570544330734548,
+            "peak": 0.125,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 0.875,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 0.125
+          }
+        ],
+        "timing": null,
+        "fit": null,
+        "renderMs": 0.4202500004321337,
+        "scope": "arithmetic fixture"
+      },
+      {
+        "kind": "convolver",
+        "rate": 48000,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 48000,
+            "rms": 0.07862784837257072,
+            "peak": 0.9927051663398743,
+            "nonfinite": 0
+          },
+          {
+            "frames": 48000,
+            "rms": 0.07743124345044829,
+            "peak": 0.9451406598091125,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 0.04691454768180847,
+        "mirrorError": null,
+        "observedOnsets": null,
+        "timing": null,
+        "fit": [
+          {
+            "lagFrames": 0,
+            "scale": 0.9982331542698332,
+            "residual": 0.02741830891024688
+          },
+          {
+            "lagFrames": 0,
+            "scale": 0.9968226347087158,
+            "residual": 0.04888490813483015
+          }
+        ],
+        "renderMs": 4.779625000432134,
+        "scope": "impulse-response identity through the host convolver; NOT a reverb quality judgement"
+      },
+      {
+        "kind": "delayonly",
+        "rate": 48000,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 48000,
+            "rms": 0.004564354645876384,
+            "peak": 1,
+            "nonfinite": 0
+          },
+          {
+            "frames": 48000,
+            "rms": 0.004564354645876384,
+            "peak": 1,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 1,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 1
+          }
+        ],
+        "timing": null,
+        "fit": null,
+        "renderMs": 0.5543750002980232,
+        "scope": "graph topology probe"
+      },
+      {
+        "kind": "fanout",
+        "rate": 48000,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 48000,
+            "rms": 0.002282177322938192,
+            "peak": 0.5,
+            "nonfinite": 0
+          },
+          {
+            "frames": 48000,
+            "rms": 0.002282177322938192,
+            "peak": 0.5,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 1,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 0.5
+          }
+        ],
+        "timing": null,
+        "fit": null,
+        "renderMs": 0.3929169997572899,
+        "scope": "graph topology probe"
+      },
+      {
+        "kind": "fanin",
+        "rate": 48000,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 48000,
+            "rms": 0.004564354645876384,
+            "peak": 1,
+            "nonfinite": 0
+          },
+          {
+            "frames": 48000,
+            "rms": 0.004564354645876384,
+            "peak": 1,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 1,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 1
+          }
+        ],
+        "timing": null,
+        "fit": null,
+        "renderMs": 0.42895899899303913,
+        "scope": "graph topology probe"
+      },
+      {
+        "kind": "fanout-gain",
+        "rate": 48000,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 48000,
+            "rms": 0.002282177322938192,
+            "peak": 0.5,
+            "nonfinite": 0
+          },
+          {
+            "frames": 48000,
+            "rms": 0.002282177322938192,
+            "peak": 0.5,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 1,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 0.5
+          }
+        ],
+        "timing": null,
+        "fit": null,
+        "renderMs": 0.6761250011622906,
+        "scope": "graph topology probe"
+      },
+      {
+        "kind": "fanin-gain",
+        "rate": 48000,
+        "status": "fail",
+        "stats": [
+          {
+            "frames": 48000,
+            "rms": 0.004564354645876384,
+            "peak": 1,
+            "nonfinite": 0
+          },
+          {
+            "frames": 48000,
+            "rms": 0.004564354645876384,
+            "peak": 1,
+            "nonfinite": 0
+          }
+        ],
+        "repeatError": 0,
+        "arithmeticError": 1,
+        "mirrorError": null,
+        "observedOnsets": [
+          {
+            "frame": 0,
+            "value": 1
+          }
+        ],
+        "timing": null,
+        "fit": null,
+        "renderMs": 0.4017909988760948,
+        "scope": "graph topology probe"
+      }
+    ]
+  },
+  "live": {
+    "liveProbeVersion": 2,
+    "sampleRate": 48000,
+    "stateBeforeClose": "running",
+    "results": [
+      {
+        "probe": "fanin-live",
+        "expected": 0.5,
+        "median": 0.5,
+        "min": 0.5,
+        "max": 0.5,
+        "status": "pass"
+      },
+      {
+        "probe": "fanout-live",
+        "expected": 0.375,
+        "median": 0.125,
+        "min": 0.125,
+        "max": 0.125,
+        "status": "fail"
+      },
+      {
+        "probe": "fanout-gain-live",
+        "expected": 0.375,
+        "median": 0.125,
+        "min": 0.125,
+        "max": 0.125,
+        "status": "fail"
+      },
+      {
+        "probe": "delay-live",
+        "expectedGapFrames": 480,
+        "peakCount": 4,
+        "gaps": [
+          480,
+          3616,
+          480
+        ],
+        "values": [
+          1,
+          0.5
+        ],
+        "pairSpacing": 2,
+        "status": "pass"
+      }
+    ],
+    "scope": "live AudioContext through an AnalyserNode with muted output; simulator/emulator graph behavior only, not device output or latency"
+  }
+}

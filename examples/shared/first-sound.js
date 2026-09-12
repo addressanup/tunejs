@@ -1,16 +1,15 @@
 // Shared by browser, Electron and React Native. Host UI owns teardown/subscriptions.
 import { Engine } from 'tunejs';
+import { softKeys } from 'tunejs/presets';
 export function firstSound(adapter) {
   const engine = new Engine({ adapter });
-  const tone = engine.oscillator({ frequencyHz: 220, wave: 'triangle' });
-  const filter = engine.filter({ frequencyHz: 1200 });
-  const level = engine.gain({ gain: 0.06 });
-  tone.connect(filter).connect(level).connect(engine.output);
-  let voice;
+  const keys = engine.instrument(softKeys);
+  keys.connect(engine.output);
+  let chord;
   return {
-    engine, filter, level,
-    async play() { await engine.start(); voice?.stop(); voice = tone.play({ duration: { seconds: 2 } }); },
-    stop() { voice?.stop(); },
+    engine, keys,
+    async play() { await engine.start(); chord?.stop(); chord = keys.play(['C4', 'E4', 'G4'], { duration: { seconds: 1.5 } }); },
+    stop() { chord?.stop(); },
     dispose() { return engine.dispose(); },
   };
 }

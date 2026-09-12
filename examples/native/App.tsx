@@ -32,10 +32,12 @@ export default function App() {
   return <ScrollView contentContainerStyle={{padding:28,paddingTop:70,gap:16}}>
     <Text style={{fontSize:36,fontWeight:'600'}}>TuneJS · First sound</Text>
     <Text>Experimental native adapter. A running state does not prove audible output.</Text>
-    <Button title="Play 2-second tone" onPress={() => void act(sound.play)} />
+    <Button title="Play chord" onPress={() => void act(sound.play)} />
     <Button title="Stop" onPress={() => void act(sound.stop)} />
-    <Button title="Warm filter · 400 Hz" onPress={() => void act(() => sound.filter.frequencyHz.rampTo(400,{seconds:0.2}))} />
-    <Button title="Bright filter · 4000 Hz" onPress={() => void act(() => sound.filter.frequencyHz.rampTo(4000,{seconds:0.2}))} />
+    <Button title="Warm filter · 800 Hz" onPress={() => void act(() => sound.keys.filterHz.rampTo(800,{seconds:0.2}))} />
+    <Button title="Bright filter · 4000 Hz" onPress={() => void act(() => sound.keys.filterHz.rampTo(4000,{seconds:0.2}))} />
+    <Button title="Long release · 1.2 s" onPress={() => void act(() => sound.keys.setEnvelope({release:1.2}))} />
+    <Button title="Short release · 0.1 s" onPress={() => void act(() => sound.keys.setEnvelope({release:0.1}))} />
     <Button title="Suspend" onPress={() => void act(() => sound.engine.suspend())} />
     <Button title="Dispose" onPress={() => void act(sound.dispose)} />
     <Text selectable>{status}</Text><View><Text selectable>{results}</Text></View>

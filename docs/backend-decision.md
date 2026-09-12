@@ -47,6 +47,10 @@ A clean native application type-checks the real AudioContext against TuneJS's ho
 
 **Other reuse options.** [Tone.js](https://tonejs.github.io/) supplies browser musical abstractions and is useful as a future workflow comparison, but was not benchmarked and does not itself establish this native contract. [Expo Audio](https://docs.expo.dev/versions/latest/sdk/audio/) supplies player/recorder/session facilities, but is not a substitute for the tested composable DSP/offline node path. Neither is rejected on performance grounds. No speculative shared engine was selected just because the architecture draft proposed one.
 
+## Wave 2 frame-conversion outcome — 2026-09-12
+
+The engine now schedules voice start/stop on whole frames and asks the adapter for the host seconds value that lands on that frame (`Adapter.hostTime`). The browser adapter passes `frame / sampleRate`, matching the exact browser placement recorded above. The native adapter passes `(frame + 0.25) / sampleRate` because the installed React Native Audio API truncates `time * sampleRate`; a quarter-frame bias stays on the target frame under both truncation and nearest rounding. A fixture-version-3 run on the iPhone 17 Pro simulator (iOS 26.5, Release) placed all twelve impulses on their requested frames at 44.1 and 48 kHz with zero strict buffer error when scheduled through that conversion, while the raw-seconds run reproduced the 1023→1022 shift. Snapshots: `docs/evidence/2026-09-12/`. Parameter automation still uses host seconds and may land one frame early on native, inside the specified onset tolerance. Live-context, transport and physical-device timing remain unverified; the raw fixture stays in the suite as the host-limitation reference.
+
 ## Wave 2 capture-boundary source findings
 
 Inspection of the installed React Native Audio API 0.13.3 source establishes limitations of the existing callback path, not measured device loss:

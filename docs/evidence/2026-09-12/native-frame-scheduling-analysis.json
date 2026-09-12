@@ -1,0 +1,13 @@
+{
+  "source": "native-results-v3-frame-scheduling.json",
+  "host": "iPhone 17 Pro simulator, iOS 26.5, React Native 0.86.3, React Native Audio API 0.13.3, Release build, OfflineAudioContext",
+  "scope": "release simulator offline PCM; no physical-device validation; no TuneJS lifecycle, capture or audible-output check",
+  "timing": [
+    {"scheduling": "raw-seconds", "rate": 44100, "status": "fail", "arithmeticError": 0.499755859375, "requestedFrame1023ObservedAt": 1022, "maxOnsetErrorFrames": 1, "gainErrorAtActualOnset": 0},
+    {"scheduling": "raw-seconds", "rate": 48000, "status": "pass", "arithmeticError": 0, "maxOnsetErrorFrames": 0, "gainErrorAtActualOnset": 0},
+    {"scheduling": "native-adapter-frames", "rate": 44100, "status": "pass", "arithmeticError": 0, "requestedFrame1023ObservedAt": 1023, "maxOnsetErrorFrames": 0, "gainErrorAtActualOnset": 0},
+    {"scheduling": "native-adapter-frames", "rate": 48000, "status": "pass", "arithmeticError": 0, "maxOnsetErrorFrames": 0, "gainErrorAtActualOnset": 0}
+  ],
+  "unchangedBetweenSchedulings": "filter smoke pass at both rates; stereo-pan arithmetic and mirror error 1.4901161193847656e-8 at both rates; HRTF unavailable (PannerNode/AudioListener absent) at both rates; repeatError 0 everywhere",
+  "interpretation": "Scheduling source start times through nativeAdapter.hostTime (frame + 0.25) / sampleRate places every fixture impulse on its requested frame under the host's truncating time-to-frame conversion, including frame 1023 at 44.1 kHz. The raw-seconds fixture keeps failing and remains the reference for the host limitation. This covers scheduled source start times only; AudioParam automation still takes seconds and may land one frame early on this host. It is not physical-device, live-context or transport evidence."
+}

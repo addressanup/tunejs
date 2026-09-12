@@ -8,7 +8,7 @@ function host() {
   const node=()=>({connect(){},disconnect(){}});
   const context={state:'suspended',sampleRate:48000,currentTime:0,destination:node(),createGain:()=>({...node(),gain:param()}),createBiquadFilter:()=>({...node(),type:'lowpass',frequency:param(),Q:param()}),createOscillator:()=>({...node(),frequency:param(),type:'sine',start(){},stop(){}}),async resume(){this.state='running';},async suspend(){this.state='suspended';},async close(){this.state='closed';}};
   let creates=0;
-  const adapter={name:'unit-test-double',createContext(){creates++;return context;},setEnded(node,fn){node.onEnded=fn;}};
+  const adapter={name:'unit-test-double',createContext(){creates++;return context;},setEnded(node,fn){node.onEnded=fn;},hostTime(frame,rate){events.push(['hostTime',frame,rate]);return frame/rate;}};
   return {engine:new Engine({adapter}),context,events,creates:()=>creates};
 }
 const code=expected=>error=>error instanceof TuneError && error.code===expected;
@@ -147,4 +147,30 @@ test('node creation failure while running reports host failure and keeps the gra
 test('resume is invoked synchronously and concurrent starts share one activation',async()=>{
  const h=host(),e=h.engine;let resumes=0;h.context.resume=function(){resumes++;this.state='running';return Promise.resolve();};
  const a=e.start(),b=e.start();assert.equal(resumes,1);assert.equal(a,b);await a;assert.equal(resumes,1);assert.equal(e.state,'running');await e.dispose();
+});
+test('voices schedule host start and stop on adapter frame times',async()=>{
+ const h=host(),e=h.engine;const s=e.oscillator();s.connect(e.output);await e.start();
+ h.context.currentTime=0.5;const v=s.play({duration:{seconds:2}});
+ assert.equal(e.currentFrame,24000);
+ assert.ok(h.events.some(event=>event[0]==='hostTime'&&event[1]===24000&&event[2]===48000));
+ assert.ok(h.events.some(event=>event[0]==='hostTime'&&event[1]===120000&&event[2]===48000));
+ h.context.currentTime=1.0000001;v.stop();
+ assert.ok(h.events.some(event=>event[0]==='hostTime'&&event[1]===48000&&event[2]===48000));
+ await e.dispose();
+});
+test('sampleRate is null and currentFrame 0 before activation; frame conversion rejects non-integers',async()=>{
+ const h=host(),e=h.engine;
+ assert.equal(e.sampleRate,null);assert.equal(e.currentFrame,0);
+ await e.start();assert.equal(e.sampleRate,48000);
+ assert.throws(()=>e.hostTimeAt(1.5),code('INVALID_VALUE'));
+ assert.throws(()=>e.hostTimeAt(-1),code('INVALID_VALUE'));
+ await e.dispose();
+});
+test('adapter hostTime failure during play surfaces HOST_FAILURE and releases the voice',async()=>{
+ const h=host(),e=h.engine;const s=e.oscillator();s.connect(e.output);await e.start();
+ const createOsc=h.context.createOscillator;let disconnects=0;h.context.createOscillator=()=>{const o=createOsc();o.disconnect=()=>{disconnects++;};return o;};
+ const hostTime=e.adapter.hostTime;e.adapter.hostTime=()=>{throw new Error('hostTime failed');};
+ assert.throws(()=>s.play(),code('HOST_FAILURE'));
+ assert.equal(e.voices.size,0);assert.equal(disconnects,1);
+ e.adapter.hostTime=hostTime;await e.dispose();
 });

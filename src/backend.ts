@@ -30,4 +30,6 @@ export interface Adapter {
   readonly name: string;
   createContext(): HostContext;
   setEnded(node: HostOscillator, callback: (() => void) | null): void;
+  /** Seconds value at which this host's own time→frame conversion lands exactly on `frame`. */
+  hostTime(frame: number, sampleRate: number): number;
 }

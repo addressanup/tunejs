@@ -11,3 +11,9 @@ export function finite(value: number, min: number, max: number, name: string): n
   }
   return value;
 }
+export function integerFrame(value: number, name: string): number {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new TuneError('INVALID_VALUE', `${name} must be a safe non-negative integer; received ${value}.`, `Choose a whole ${name}.`);
+  }
+  return value;
+}

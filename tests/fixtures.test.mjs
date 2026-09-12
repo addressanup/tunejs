@@ -1,6 +1,29 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import * as fixtures from '../experiments/fixtures.js';
+import {browserAdapter} from '../dist/adapters/browser.js';
+import {nativeAdapter} from '../dist/adapters/native.js';
+
+// Simulates React Native Audio API scheduling: start frame = static_cast<size_t>(seconds * sampleRate).
+// Impulses render with the fixture's ramp gain at whichever frame the host selected.
+function truncatingOffline({sampleRate,length}) {
+  const starts=[];
+  const node=()=>({connect(){},disconnect(){}});
+  const param=()=>({setValueAtTime(){},linearRampToValueAtTime(){}});
+  return {
+    destination:node(),
+    createBuffer(_channels,frames){const data=new Float32Array(frames);return {getChannelData:()=>data};},
+    createBufferSource(){return {...node(),start(seconds){starts.push(Math.trunc(seconds*sampleRate));}};},
+    createGain:()=>({...node(),gain:param()}),
+    createBiquadFilter:()=>({...node(),frequency:param(),Q:param()}),
+    createStereoPanner:()=>({...node(),pan:param()}),
+    async startRendering(){
+      const channels=[0,1].map(()=>new Float32Array(length));
+      for(const frame of starts) for(const data of channels) data[frame]+=Math.fround(0.25+0.25*Math.min(frame/1024,1));
+      return {getChannelData:index=>channels[index]};
+    }
+  };
+}
 
 function timingPCM(rate=48000,place=frame=>frame) {
   return [0,1].map(channel=>{
@@ -97,7 +120,8 @@ test('fixture reports retain strict timing failures alongside onset diagnostics'
     };
   };
   const report=await fixtures.runFixtures(createOffline);
-  assert.equal(report.fixtureVersion,2);
+  assert.equal(report.fixtureVersion,3);
+  assert.equal(report.scheduling,'raw-seconds');
   const timing=report.results.filter(result=>result.kind==='timing');
   assert.equal(timing.length,2);
   for(const result of timing) {
@@ -107,4 +131,47 @@ test('fixture reports retain strict timing failures alongside onset diagnostics'
     assert.equal(result.timing.channels[0].maxOnsetErrorFrames,1);
     assert.equal(result.observedOnsets[5].frame,1022);
   }
+});
+
+test('raw seconds shift frame 1023 on a truncating host at 44.1 kHz; adapter frame scheduling lands exactly',async()=>{
+  const native=nativeAdapter(()=>{throw new Error('offline fixture only');});
+  const browser=browserAdapter();
+  for(const rate of [44100,48000]) {
+    const raw=fixtures.analyzeTimingFixture((await fixtures.renderFixture(truncatingOffline,'timing',rate)).channels);
+    const scheduled=fixtures.analyzeTimingFixture((await fixtures.renderFixture(truncatingOffline,'timing',rate,-0.75,native.hostTime)).channels);
+    for(const channel of raw.channels) {
+      assert.equal(channel.observedCount,fixtures.impulseFrames.length);
+      assert.equal(channel.maxOnsetErrorFrames,rate===44100?1:0);
+      if(rate===44100) assert.equal(channel.frameOffsets[5],-1);
+    }
+    assert.equal(scheduled.onsetStatus,'pass');
+    for(const channel of scheduled.channels) {
+      assert.deepEqual(channel.observedOnsets.map(onset=>onset.frame),fixtures.impulseFrames);
+      assert.equal(channel.maxOnsetErrorFrames,0);
+      assert.equal(channel.gainErrorAtActualOnset,0);
+    }
+    for(const frame of fixtures.impulseFrames) {
+      assert.equal(browser.hostTime(frame,rate),frame/rate);
+      const scheduledSeconds=native.hostTime(frame,rate);
+      assert.equal(Math.trunc(scheduledSeconds*rate),frame);
+      assert.equal(Math.round(scheduledSeconds*rate),frame);
+    }
+  }
+});
+
+test('fixture reports label the scheduling conversion and reject malformed options',async()=>{
+  const native=nativeAdapter(()=>{throw new Error('offline fixture only');});
+  const report=await fixtures.runFixtures(truncatingOffline,{hostTime:native.hostTime,scheduling:'native-adapter-frames'});
+  assert.equal(report.fixtureVersion,3);
+  assert.equal(report.scheduling,'native-adapter-frames');
+  for(const result of report.results.filter(result=>result.kind==='timing')) {
+    assert.equal(result.status,'pass');
+    assert.equal(result.arithmeticError,0);
+    assert.equal(result.timing.onsetStatus,'pass');
+  }
+  const unlabeled=await fixtures.runFixtures(truncatingOffline,{hostTime:native.hostTime});
+  assert.equal(unlabeled.scheduling,'custom');
+  await assert.rejects(fixtures.runFixtures(truncatingOffline,{hostTime:'frames'}),TypeError);
+  await assert.rejects(fixtures.runFixtures(truncatingOffline,{scheduling:''}),TypeError);
+  await assert.rejects(fixtures.renderFixture(truncatingOffline,'timing',48000,-0.75,null),TypeError);
 });

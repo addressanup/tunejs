@@ -1,0 +1,11 @@
+{
+  "filename": "tunejs-0.0.1-dev.0.tgz",
+  "size": 13112,
+  "unpackedSize": 53167,
+  "entryCount": 20,
+  "integrity": "sha512-fln6xrg+4MKRSZsYYAbOlyHF02DbyU6HaYMLoQiT3XEriFSrgQnaMQpGIDKUI7IsL74Mz77xsnP+eo42DD5/tQ==",
+  "cleanConsumer": "pass",
+  "directory": "/Users/anuppandey/Documents/ChatGPT/TuneJS/artifacts/package-check-bCcjmh",
+  "tarball": "/Users/anuppandey/Documents/ChatGPT/TuneJS/artifacts/package-check-bCcjmh/tunejs-0.0.1-dev.0.tgz",
+  "scope": "Fresh staged build; packed JS/TS imports and lazy activation only; no audio or native-device verification"
+}

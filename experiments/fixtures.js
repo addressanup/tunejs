@@ -1,6 +1,9 @@
 // Identical graph fixtures run against browser and RN OfflineAudioContext factories.
 // Fixed pre-run tolerances: arithmetic 1e-5; onset <= 1 sample; repeatability 1e-7.
-export const fixtureVersion = 2;
+// Version 3 adds an explicit scheduling conversion: `hostTime(frame, rate)` maps a target frame to the
+// seconds value handed to the host. The default is raw `frame / rate`; adapters may supply their own.
+export const fixtureVersion = 3;
+export const rawSeconds = (frame, rate) => frame / rate;
 export const impulseFrames = [0, 127, 128, 129, 511, 1023, 1024, 8000, 16000, 24000, 32000, 40000];
 export function summarize(channels) {
   return channels.map(data => {
@@ -41,7 +44,8 @@ export function analyzeTimingFixture(channels) {
   });
   return {onsetStatus:results.every(result=>result.maxOnsetErrorFrames!==null && result.maxOnsetErrorFrames<=1)?'pass':'fail',toleranceFrames:1,channels:results};
 }
-export async function renderFixture(createOffline, kind, rate=48000, pan=-0.75) {
+export async function renderFixture(createOffline, kind, rate=48000, pan=-0.75, hostTime=rawSeconds) {
+  if(typeof hostTime !== 'function') throw new TypeError('hostTime must be a function (frame, rate) => seconds.');
   const length = rate;
   const context = createOffline({ numberOfChannels: 2, length, sampleRate: rate });
   const buffer = context.createBuffer(1, length, rate);
@@ -62,18 +66,21 @@ export async function renderFixture(createOffline, kind, rate=48000, pan=-0.75) 
   if(kind === 'timing') {
     source.disconnect();
     const impulse=context.createBuffer(1,1,rate); impulse.getChannelData(0)[0]=1;
-    for(const frame of impulseFrames) { const tick=context.createBufferSource();tick.buffer=impulse;tick.connect(gain);tick.start(frame/rate); }
-  } else source.start(0);
+    for(const frame of impulseFrames) { const tick=context.createBufferSource();tick.buffer=impulse;tick.connect(gain);tick.start(hostTime(frame,rate)); }
+  } else source.start(hostTime(0,rate));
   const start=performance.now(); const output=await context.startRendering();
   return { channels:[output.getChannelData(0),output.getChannelData(1)], renderMs:performance.now()-start };
 }
-export async function runFixtures(createOffline) {
+export async function runFixtures(createOffline, options={}) {
+  const hostTime=options.hostTime ?? rawSeconds;
+  const scheduling=options.scheduling ?? (options.hostTime ? 'custom' : 'raw-seconds');
+  if(typeof hostTime !== 'function' || typeof scheduling !== 'string' || !scheduling) throw new TypeError('runFixtures options require a hostTime function and a nonempty scheduling label.');
   const results=[];
   for(const rate of [44100,48000]) for(const kind of ['timing','filter','pan','hrtf']) {
     try {
-      const output=await renderFixture(createOffline,kind,rate);
+      const output=await renderFixture(createOffline,kind,rate,-0.75,hostTime);
       if(output.unavailable) { results.push({kind,rate,status:'unavailable',reason:output.unavailable}); continue; }
-      const repeat=await renderFixture(createOffline,kind,rate);
+      const repeat=await renderFixture(createOffline,kind,rate,-0.75,hostTime);
       const stats=summarize(output.channels);
       const repeatError=Math.max(...output.channels.map((x,i)=>maxError(x,repeat.channels[i])));
       let arithmeticError=null, mirrorError=null, observedOnsets=null, timing=null;
@@ -85,7 +92,7 @@ export async function runFixtures(createOffline) {
         observedOnsets=timing.channels[0].observedOnsets;
       }
       if(kind==='pan') {
-        const mirror=await renderFixture(createOffline,kind,rate,0.75);
+        const mirror=await renderFixture(createOffline,kind,rate,0.75,hostTime);
         mirrorError=maxError(output.channels[0],mirror.channels[1]);
         const angle=0.25*Math.PI/4;
         const expected=Float32Array.from({length:rate},(_,i)=>Math.fround(Math.sin(2*Math.PI*432*i/rate))*0.25*Math.cos(angle));
@@ -96,5 +103,5 @@ export async function runFixtures(createOffline) {
         scope:kind==='hrtf'?'finite/nonzero/repeated fixed pose only; NOT localization/reference acceptance':kind==='filter'?'finite/repeatable smoke; NOT cross-backend reference acceptance':'arithmetic fixture'});
     } catch(error) { results.push({kind,rate,status:'error',error:String(error)}); }
   }
-  return {fixtureVersion,results};
+  return {fixtureVersion,scheduling,results};
 }

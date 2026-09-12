@@ -8,4 +8,4 @@ Preserve the committed-intent dependency lockfile when refreshing the local Tune
 
 For isolated offline-fixture evidence, run the root `scripts/serve.mjs` with the new package-check directory as its working directory. Its result path is relative to that working directory. Use a separate run directory for each evidence capture so historical `artifacts/native-results.json` is not overwritten. Do not treat simulator offline fixtures as physical-device, microphone, lifecycle or audible-output validation.
 
-The example app carries a network security config permitting cleartext only to the emulator host alias 10.0.2.2 for local fixture reporting (mirroring the iOS `NSAllowsLocalNetworking` entry); it is example-app configuration, not library behavior.
+The example app carries a network security config permitting cleartext only to 10.0.2.2 (emulator host alias) and 127.0.0.1 (adb reverse to the host for physical devices) for local fixture reporting (mirroring the iOS `NSAllowsLocalNetworking` entry); it is example-app configuration, not library behavior.

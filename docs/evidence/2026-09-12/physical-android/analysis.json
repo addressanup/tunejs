@@ -1,0 +1,8 @@
+{
+  "device": "Nothing A059P, Android 16 (API 36), arm64-v8a; React Native 0.86.3, React Native Audio API 0.13.3, Release APK signed with the Expo development key; results posted over adb reverse to the host",
+  "runs": ["native-results-android-device.json (17:26:55Z)", "native-results-android-device-run2.json (17:31:10Z)"],
+  "offlineFixtures": "identical to the emulator and iOS simulator: raw 44.1 kHz timing fails by the one-frame truncation (adapter-scheduled passes at both rates); filter smoke and stereo pan (1.49e-8) pass; HRTF unavailable; delay, convolver and every topology probe fail as on the emulator",
+  "liveProbes": "identical to emulator and simulator: fan-in sums (0.5), fan-out from a source or a gain keeps one edge (0.125), DelayNode delays exactly 480 frames",
+  "lifecycle": "process survived a 3 s background/foreground cycle with the same pid; the fixture effect runs on mount only, so no second payload was expected. One launch crashed in libhermesvm.so before posting (same crash family observed on the iOS simulator); the relaunch posted.",
+  "interpretation": "The host defects (offline no-sum/zero-delay, live single outgoing edge) and the frame-conversion finding are properties of React Native Audio API 0.13.3 on real Android hardware, not simulator artifacts. This is graph-behavior evidence only: no listening, latency, route, interruption or sustained-workload measurement was made, and the app was not exercised audibly."
+}

@@ -1,0 +1,1 @@
+09-12 23:16:03.467 26024 26047 I ReactNativeJS: Running "main"

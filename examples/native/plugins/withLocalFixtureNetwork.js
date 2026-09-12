@@ -1,5 +1,6 @@
-// Permits cleartext HTTP only to the Android emulator host alias 10.0.2.2 so the
-// example app can POST local fixture results. Mirrors the iOS NSAllowsLocalNetworking entry.
+// Permits cleartext HTTP only to the Android emulator host alias 10.0.2.2 and to
+// 127.0.0.1 (adb reverse to the host for physical devices) so the example app can
+// POST local fixture results. Mirrors the iOS NSAllowsLocalNetworking entry.
 const { withAndroidManifest, withDangerousMod } = require('expo/config-plugins');
 const fs = require('fs/promises');
 const path = require('path');
@@ -7,6 +8,7 @@ const path = require('path');
 const NETWORK_SECURITY_CONFIG = `<network-security-config>
   <domain-config cleartextTrafficPermitted="true">
     <domain includeSubdomains="false">10.0.2.2</domain>
+    <domain includeSubdomains="false">127.0.0.1</domain>
   </domain-config>
 </network-security-config>
 `;

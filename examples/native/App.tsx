@@ -26,10 +26,25 @@ export default function App() {
         const scheduled = await runFixtures(createOffline, {hostTime: adapter.hostTime, scheduling: 'native-adapter-frames'});
         let live;
         try { live = await runLiveProbes(() => new AudioContext(), { settleMs: 600 }); } catch(error) { live = { status: 'error', error: String(error) }; }
-        const data = {date:new Date().toISOString(),platform:Platform.OS,version:Platform.Version,rn:Platform.constants.reactNativeVersion,scope:'release simulator offline PCM; no physical-device validation',...raw,adapterScheduled:scheduled,live};
+        const constants = Platform.constants as { Model?: string; Brand?: string; Manufacturer?: string; systemName?: string };
+        const device = { model: constants.Model ?? null, brand: constants.Brand ?? null, manufacturer: constants.Manufacturer ?? null, systemName: constants.systemName ?? null };
+        const data = {date:new Date().toISOString(),platform:Platform.OS,version:Platform.Version,rn:Platform.constants.reactNativeVersion,device,scope:'offline PCM + live graph probes on the running host; not a listening or latency measurement',...raw,adapterScheduled:scheduled,live};
         if(alive) setResults(JSON.stringify(data,null,2));
-        const endpoint = Platform.OS === 'android' ? 'http://10.0.2.2:4173' : 'http://127.0.0.1:4173';
-        await fetch(`${endpoint}/results/native`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data,null,2)});
+        const endpoints = Platform.OS === 'android' ? ['http://10.0.2.2:4173','http://127.0.0.1:4173'] : ['http://127.0.0.1:4173'];
+        let posted = false; let attempts = 0; let lastError: unknown;
+        for (const endpoint of endpoints) {
+          attempts += 1;
+          const control = new AbortController();
+          const timer = setTimeout(() => control.abort(), 3000);
+          try {
+            await fetch(`${endpoint}/results/native`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data,null,2),signal:control.signal});
+            posted = true;
+            if(alive) setStatus(`posted ${endpoint} (attempt ${attempts})`);
+            break;
+          } catch(error) { lastError = error; }
+          finally { clearTimeout(timer); }
+        }
+        if (!posted) throw lastError;
       } catch(error) { if(alive) setResults(String(error)); }
     })();
     return () => { alive=false; subscription.remove(); void loop.dispose().catch(console.error); void sound.dispose().catch(console.error); };

@@ -207,6 +207,42 @@ export class Instrument extends GraphNode {
   unregister(voice: SynthVoice): void;
 }
 
+/** @internal — ADS value at `elapsed` seconds after note-on, shared by the live and offline voices. */
+export function adsValueAt(envelope: Envelope, peak: number, elapsed: number): number {
+  const { attack, decay, sustain } = envelope;
+  if (elapsed <= 0) return 0;
+  if (elapsed <= attack) return attack > 0 ? peak * elapsed / attack : peak;
+  if (elapsed <= attack + decay) return decay > 0 ? peak + (peak * sustain - peak) * (elapsed - attack) / decay : peak * sustain;
+  return peak * sustain;
+}
+
+/** @internal — the exact event list SynthVoice programs; `seconds` are offsets from note-on. */
+export function envelopeEvents(envelope: Envelope, duration: number | undefined, peak: number): { seconds: number; value: number; ramp: boolean }[] {
+  const { attack, decay, sustain, release } = envelope;
+  const events: { seconds: number; value: number; ramp: boolean }[] = [{ seconds: 0, value: 0, ramp: false }];
+  if (duration === undefined) {
+    if (attack > 0) events.push({ seconds: attack, value: peak, ramp: true });
+    else events.push({ seconds: 0, value: peak, ramp: false });
+    if (decay > 0) events.push({ seconds: attack + decay, value: peak * sustain, ramp: true });
+    else events.push({ seconds: attack, value: peak * sustain, ramp: false });
+    return events;
+  }
+  if (duration <= attack) {
+    events.push({ seconds: duration, value: peak * duration / attack, ramp: true });
+  } else if (duration <= attack + decay) {
+    events.push({ seconds: attack, value: peak, ramp: true });
+    events.push({ seconds: duration, value: adsValueAt(envelope, peak, duration), ramp: true });
+  } else {
+    if (attack > 0) events.push({ seconds: attack, value: peak, ramp: true });
+    else events.push({ seconds: 0, value: peak, ramp: false });
+    if (decay > 0) events.push({ seconds: attack + decay, value: peak * sustain, ramp: true });
+    else events.push({ seconds: attack, value: peak * sustain, ramp: false });
+    events.push({ seconds: duration, value: peak * sustain, ramp: false });
+  }
+  events.push({ seconds: duration + release, value: 0, ramp: true });
+  return events;
+}
+
 export class SynthVoice implements OwnedVoice {
   #ended = false;
   #stopping = false;
@@ -268,23 +304,12 @@ export class SynthVoice implements OwnedVoice {
       const gain = env.gain;
       const { attack, decay, sustain, release } = envelope;
       const peak = this.#peak;
-      gain.setValueAtTime(0, t0);
-      if (duration === undefined) {
-        if (attack > 0) gain.linearRampToValueAtTime(peak, t0 + attack); else gain.setValueAtTime(peak, t0);
-        if (decay > 0) gain.linearRampToValueAtTime(peak * sustain, t0 + attack + decay); else gain.setValueAtTime(peak * sustain, t0 + attack);
-      } else {
+      for (const event of envelopeEvents(envelope, duration, peak)) {
+        const at = t0 + event.seconds;
+        if (event.ramp) gain.linearRampToValueAtTime(event.value, at); else gain.setValueAtTime(event.value, at);
+      }
+      if (duration !== undefined) {
         const tRel = t0 + duration;
-        if (duration <= attack) {
-          gain.linearRampToValueAtTime(peak * duration / attack, tRel);
-        } else if (duration <= attack + decay) {
-          gain.linearRampToValueAtTime(peak, t0 + attack);
-          gain.linearRampToValueAtTime(this.adsValue(tRel), tRel);
-        } else {
-          if (attack > 0) gain.linearRampToValueAtTime(peak, t0 + attack); else gain.setValueAtTime(peak, t0);
-          if (decay > 0) gain.linearRampToValueAtTime(peak * sustain, t0 + attack + decay); else gain.setValueAtTime(peak * sustain, t0 + attack);
-          gain.setValueAtTime(peak * sustain, tRel);
-        }
-        gain.linearRampToValueAtTime(0, tRel + release);
         this.#releaseStart = tRel; this.#releaseStartValue = this.adsValue(tRel); this.#releaseEnd = tRel + release;
       }
       const startAt = engine.hostTimeAt(startFrame);
@@ -313,12 +338,7 @@ export class SynthVoice implements OwnedVoice {
   get state(): 'playing' | 'stopping' | 'ended' { return this.#ended ? 'ended' : this.#stopping ? 'stopping' : 'playing'; }
   /** @internal */ get stopping(): boolean { return this.#stopping && !this.#ended; }
   private adsValue(t: number): number {
-    const { attack, decay, sustain } = this.#envelope;
-    const t0 = this.#t0;
-    if (t <= t0) return 0;
-    if (t <= t0 + attack) return attack > 0 ? this.#peak * (t - t0) / attack : this.#peak;
-    if (t <= t0 + attack + decay) return decay > 0 ? this.#peak + (this.#peak * sustain - this.#peak) * (t - t0 - attack) / decay : this.#peak * sustain;
-    return this.#peak * sustain;
+    return adsValueAt(this.#envelope, this.#peak, t - this.#t0);
   }
   private valueAt(t: number): number {
     if (this.#releaseStart !== undefined && t >= this.#releaseStart) {

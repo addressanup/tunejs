@@ -77,6 +77,8 @@ async function example() {
   (await e.meter({ source: mic })).read();
   const { project } = e.exportProject();
   await e.importProject(project, { resolveAsset: async () => new ArrayBuffer(0) });
+  const rendered = await Engine.render(project, { range: { fromBeat: 0, toBeat: 4 }, tail: { seconds: 1 }, sampleRate: 48000 });
+  rendered.encode({ format: 'wav' });
   await e.dispose();
 }
 void idle;

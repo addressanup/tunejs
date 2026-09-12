@@ -5,11 +5,12 @@
 <h1>TuneJS</h1><p>A loop that keeps running while you change it.</p>
 <small>Living-loop development snapshot · softKeys + softDrums under a transport at 108 bpm</small>
 <p><button id="start">Start</button><button id="stop">Stop</button><button id="replace">Replace phrase</button><button id="t124">Tempo 124</button><button id="t96">Tempo 96</button></p>
-<p><button id="export">Export project</button><button id="import">Import project</button><input id="file" type="file" accept="application/json" hidden></p>
+<p><button id="export">Export project</button><button id="import">Import project</button><input id="file" type="file" accept="application/json" hidden><button id="render">Render 8 bars to WAV</button></p>
 <p id="status" role="status">Idle. Press Start to activate output.</p><pre id="diagnostics"></pre>
 <p><small>Phrase and tempo changes apply at the next bar. A running state does not confirm audible output. Check volume and route if silent.</small></p>
 <p><a href="/examples/browser/index.html">First-sound example</a></p>
 <script type="module">
+import { Engine } from 'tunejs';
 import { browserAdapter } from 'tunejs/browser';
 import { livingLoop, importLoop } from '/examples/shared/living-loop.js';
 let loop = livingLoop(browserAdapter());
@@ -41,6 +42,19 @@ file.onchange = async () => {
     loop = await importLoop(browserAdapter(), project, { resolveAsset: async id => { throw new Error(`Asset '${id}' is not bundled in this example.`); } });
     previous.dispose().catch(failure);
     status.textContent = 'Imported — press Start to run it.';
+    report();
+  } catch(error) { failure(error); }
+};
+document.querySelector('#render').onclick = async () => {
+  try {
+    status.textContent = 'Rendering offline…';
+    const rendered = await Engine.render(loop.exportProject().project, { range: { fromBeat: 0, toBeat: 32 }, tail: { seconds: 1 }, sampleRate: 48000 });
+    const { bytes, clippedSamples } = rendered.encode({ format: 'wav' });
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = 'living-loop.wav'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    status.textContent = `Rendered ${rendered.frames} frames at ${rendered.sampleRate} Hz (${clippedSamples} clipped).`;
     report();
   } catch(error) { failure(error); }
 };

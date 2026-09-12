@@ -59,6 +59,10 @@ async function example() {
   clip.play({ loop: true }).stop();
   e.instrument(softKeys).connect(e.delay({ time: { seconds: 0.3 } })).connect(e.reverb()).connect(e.pan({ pan: -0.3 })).connect(e.bus({ gainDb: -6 })).connect(e.output);
   e.kit(softDrums).play('kick');
+  const part = e.transport.schedule(e.pattern({ length: { beats: 4 }, events: [{ beat: 0, notes: 'C4', duration: { beats: 1 } }] }), e.instrument(softKeys));
+  e.transport.bpm.set(100);
+  part.replace(e.pattern({ length: { beats: 2 }, events: [] }), { boundary: 'next-bar' });
+  part.cancel();
   await e.dispose();
 }
 void idle;

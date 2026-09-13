@@ -118,3 +118,50 @@ test('spatialSource validates, rejects binaural, and disposes cleanly',async()=>
   await e.dispose();
   assert.equal(e.diagnostics.nodes,0);
 });
+
+test('stereoRender bearing and elevation are full-circle',()=>{
+  const r=stereoRender(listener,at({x:1,y:0,z:0}));
+  assert.ok(close(r.bearingDegrees,90)&&close(r.elevationDegrees,0),'right is bearing 90');
+  assert.ok(close(stereoRender(listener,at({x:-1,y:0,z:0})).bearingDegrees,270),'left is bearing 270');
+  assert.ok(close(stereoRender(listener,at({x:0,y:0,z:1})).bearingDegrees,180),'behind is bearing 180');
+  assert.ok(close(stereoRender(listener,at({x:0,y:1,z:0})).elevationDegrees,90),'overhead is elevation 90');
+  const d=stereoRender(listener,at({x:0,y:0,z:0}));
+  assert.ok(close(d.bearingDegrees,0)&&close(d.elevationDegrees,0),'coincident → both 0');
+});
+
+test('binaural spatial source validates, binds three params, and disposes',async()=>{
+  const {encodeHrtfAsset}=await import('../dist/hrtf.js');
+  const {syntheticHrtfTable}=await import('../experiments/fixtures.js');
+  const table=syntheticHrtfTable(48000);
+  const bytes=encodeHrtfAsset({format:'tunejs-hrtf',version:1,id:'test',azimuthConvention:'c',elevations:table.elevations,azimuthStepDegrees:table.azimuthStepDegrees,poles:'single',taps:table.taps,sampleFormat:'int16',rates:[48000],positions:table.rows.reduce((n,r)=>n+r.length/(2*table.taps),0),layout:'test',peak:1,source:{},conversion:'x'},new Map([[48000,table]]));
+  // dsp-capable host double
+  const h=host();
+  const created=[];
+  h.adapter.dsp={async load(){},createBinaural(context,spec){
+    const mk=()=>({value:0,events:[],setValueAtTime(v,t){this.events.push(['set',v,t]);this.value=v;},linearRampToValueAtTime(v,t){this.events.push(['ramp',v,t]);this.value=v;},cancelScheduledValues(t){this.events.push(['cancel',t]);}});
+    const node={closed:false,connects:0,gain:mk(),azimuth:mk(),elevation:mk(),connect(){this.connects++;},disconnect(){},close(){this.closed=true;}};
+    created.push({node,spec});return node;
+  }};
+  const e=new Engine({adapter:h.adapter});
+  await assert.rejects(e.spatialSource({rendering:'binaural'}),rejectCode('INVALID_VALUE'),'hrtf required');
+  const hrtf=await e.loadHrtf({bytes});
+  const s=await e.spatialSource({rendering:'binaural',hrtf,position:{x:1,y:0,z:0},smoothingSeconds:0.02});
+  await e.start();
+  assert.equal(created.length,1);
+  const {node,spec}=created[0];
+  assert.equal(spec.smoothingFrames,960);
+  assert.equal(spec.hrtf.sampleRate,48000);
+  assert.equal(s.input,node,'binaural node is the input and the host output');
+  // position (1,0,0) → bearing 90 elevation 0 set (not ramped) at evaluate
+  assert.ok(node.azimuth.events.some(ev=>ev[0]==='set'&&ev[1]===90),`azimuth events ${JSON.stringify(node.azimuth.events)}`);
+  s.dispose();
+  assert.ok(node.closed,'dispose closes the node');
+  await e.dispose();
+});
+
+test('binaural spatialSource rejects on a host without a dsp path',async()=>{
+  const e=host().engine;
+  const fake={id:'x'};
+  await assert.rejects(e.spatialSource({rendering:'binaural',hrtf:fake}),rejectCode('UNSUPPORTED'));
+  await e.dispose();
+});

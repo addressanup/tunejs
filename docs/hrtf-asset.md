@@ -34,7 +34,7 @@ Header fields (all required):
 | `layout` | `"rate-major: for each rate, for each elevation row, for each azimuth ascending from 0: left[taps] then right[taps]"` |
 | `peak` | largest absolute sample across both rates |
 | `source` | dataset, release, subject, head, licence, URL, archive URL and MD5, file pattern, citation |
-| `conversion` | `"asset azimuth = (360 − SADIE azimuth) mod 360; 24-bit samples truncated to int16 (48 kHz), 16-bit copied (44.1 kHz); no gain normalization"` |
+| `conversion` | `"asset azimuth = (360 − SADIE azimuth) mod 360; samples clamped and rounded to int16 via Math.round(v * 32768) (24-bit at 48 kHz, 16-bit at 44.1 kHz); no gain normalization"` |
 
 Position index inside a rate block: rows in `elevations` order; within a row, azimuth `0, step, 2·step, …`; each position is `2 × taps` samples. The prepared file is about 1.6 MB and lives at `assets/hrtf/sadie2-d1-ku100-v1.tjhrtf`; `scripts/prepare-hrtf.mjs` rebuilds it from the archive and `--check` verifies the committed file byte-for-byte. Project documents reference the asset by `id` and `fnv1a64:` integrity over the whole file, like sample assets.
 

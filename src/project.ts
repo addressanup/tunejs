@@ -1,5 +1,7 @@
 import { decodeWav, fnv1a64Float32 } from './assets.js';
 import type { DecodedWav } from './assets.js';
+import { decodeHrtfAsset, fnv1a64Bytes } from './hrtf.js';
+import type { HrtfAsset } from './hrtf.js';
 import type { Engine } from './engine.js';
 import { TuneError, finite } from './errors.js';
 import { Gain, Filter, GraphNode, Oscillator } from './graph.js';
@@ -27,8 +29,12 @@ export type ProjectNode = { id: string } & (
   | { type: 'pan'; params: { pan: number } }
   | { type: 'delay'; timeSeconds: number; feedback: number; taps: number; params: { mix: number } }
   | { type: 'reverb'; renderer: 'synthetic-convolution-v1'; decaySeconds: number; params: { mix: number } }
-  | { type: 'spatial'; renderer: 'tunejs-stereo-v1'; rendering: 'stereo'; position: Vec3; direction: Vec3 | null; distance: DistanceModel; cone: Cone; smoothingSeconds: number }
+  | { type: 'spatial'; renderer: 'tunejs-stereo-v1' | 'tunejs-binaural-v1'; rendering: 'stereo' | 'binaural'; hrtf?: { id: string; integrity: string }; position: Vec3; direction: Vec3 | null; distance: DistanceModel; cone: Cone; smoothingSeconds: number }
 );
+
+export type ProjectAsset =
+  | { id: string; kind?: 'sample'; sampleRate: number; channels: number; frames: number; integrity: string }
+  | { id: string; kind: 'hrtf'; integrity: string; bytes: number; rates: number[]; taps: number; positions: number };
 export interface ProjectV1 {
   format: 'tunejs-project'; version: 1;
   transport: { bpm: number; beatsPerBar: number };
@@ -37,7 +43,7 @@ export interface ProjectV1 {
   connections: { from: string; to: string }[];
   patterns: { id: string; length: Beats; events: PatternEvent[] }[];
   parts: { patternId: string; targetId: string; startBeat: number; loop: boolean }[];
-  assets: { id: string; sampleRate: number; channels: number; frames: number; integrity: string }[];
+  assets: ProjectAsset[];
 }
 
 const nodeSort = (a: ProjectNode, b: ProjectNode): number => Number(a.id.slice(1)) - Number(b.id.slice(1));
@@ -53,7 +59,8 @@ function serializeNode(node: GraphNode): ProjectNode {
   if (node instanceof Delay) return { id, type: 'delay', timeSeconds: node.timeSeconds, feedback: node.feedback, taps: node.taps, params: { mix: node.mix.value } };
   if (node instanceof Reverb) return { id, type: 'reverb', renderer: 'synthetic-convolution-v1', decaySeconds: node.decaySeconds, params: { mix: node.mix.value } };
   if (node instanceof SpatialSource) {
-    return { id, type: 'spatial', renderer: 'tunejs-stereo-v1', rendering: node.rendering as 'stereo', position: node.position, direction: node.direction, distance: node.distanceModel, cone: node.cone, smoothingSeconds: node.smoothingSeconds };
+    const binaural = node.rendering === 'binaural';
+    return { id, type: 'spatial', renderer: binaural ? 'tunejs-binaural-v1' : 'tunejs-stereo-v1', rendering: node.rendering, ...(binaural ? { hrtf: { id: node.hrtf!.id, integrity: node.hrtf!.integrity } } : {}), position: node.position, direction: node.direction, distance: node.distanceModel, cone: node.cone, smoothingSeconds: node.smoothingSeconds };
   }
   if (node instanceof Filter) return { id, type: 'filter', filterType: node.type, params: { frequencyHz: node.frequencyHz.value } };
   if (node instanceof Gain) return { id, type: 'gain', params: { gain: node.gain.value } };
@@ -100,10 +107,16 @@ export function exportProject(engine: Engine): { project: ProjectV1; warnings: s
     parts.push({ patternId, targetId: part.target.nodeId, startBeat: part.startBeat, loop: part.loop });
   }
   const assets: ProjectV1['assets'] = [];
+  const hrtfSeen = new Set<string>();
   for (const node of engine.nodes) {
     if (node instanceof Sample) {
       const decoded = node.entry.decoded;
       assets.push({ id: node.entry.id, sampleRate: decoded.sampleRate, channels: decoded.channels.length, frames: decoded.frames, integrity: fnv1a64Float32(decoded.channels) });
+    }
+    if (node instanceof SpatialSource && node.rendering === 'binaural' && node.hrtf && !hrtfSeen.has(node.hrtf.id)) {
+      hrtfSeen.add(node.hrtf.id);
+      const bytes = engine.hrtfBytes(node.hrtf);
+      assets.push({ id: node.hrtf.id, kind: 'hrtf', integrity: fnv1a64Bytes(bytes), bytes: bytes.byteLength, rates: [...node.hrtf.tables.keys()], taps: node.hrtf.header.taps, positions: node.hrtf.header.positions });
     }
   }
   const listener = engine.listener;
@@ -122,7 +135,7 @@ const isObject = (value: unknown): value is Record<string, unknown> => typeof va
 const KNOWN_TYPES = new Set(['oscillator', 'gain', 'filter', 'instrument', 'kit', 'sample', 'bus', 'pan', 'delay', 'reverb', 'spatial']);
 
 /** @internal — shared phase-1 validation used by importProject and Engine.render. Returns parsed sections plus every problem found; callers append host-specific problems and throw. */
-export function checkProject(project: unknown): { p: ProjectV1; defs: ProjectNode[]; connections: ProjectV1['connections']; patternDefs: ProjectV1['patterns']; partDefs: ProjectV1['parts']; manifest: Map<string, { sampleRate: number; channels: number; frames: number; integrity: string }>; problems: string[] } {
+export function checkProject(project: unknown): { p: ProjectV1; defs: ProjectNode[]; connections: ProjectV1['connections']; patternDefs: ProjectV1['patterns']; partDefs: ProjectV1['parts']; manifest: Map<string, ProjectAsset & { kind: 'sample' | 'hrtf' }>; problems: string[] } {
   const problems: string[] = [];
   const p = project as ProjectV1;
   if (!isObject(p) || p.format !== 'tunejs-project') problems.push('format must be "tunejs-project"');
@@ -175,30 +188,42 @@ export function checkProject(project: unknown): { p: ProjectV1; defs: ProjectNod
     else if (!['instrument', 'kit', 'sample'].includes(target.type as string)) problems.push(`part target '${String(part.targetId)}' cannot be scheduled`);
   }
   const assetManifest = isObject(p) && Array.isArray(p.assets) ? p.assets : [];
-  const manifest = new Map<string, { sampleRate: number; channels: number; frames: number; integrity: string }>();
-  for (const asset of assetManifest) if (isObject(asset) && typeof asset.id === 'string') manifest.set(asset.id, asset as { sampleRate: number; channels: number; frames: number; integrity: string });
+  const manifest = new Map<string, ProjectAsset & { kind: 'sample' | 'hrtf' }>();
+  for (const asset of assetManifest) {
+    if (isObject(asset) && typeof asset.id === 'string') manifest.set(asset.id, { kind: 'sample', ...asset } as ProjectAsset & { kind: 'sample' | 'hrtf' });
+  }
   for (const def of defs) {
     if (isObject(def) && def.type === 'sample') {
       if (!manifest.has(def.assetId as string)) problems.push(`sample node '${def.id}' references asset '${String(def.assetId)}' missing from the manifest`);
+    }
+    if (isObject(def) && def.type === 'spatial' && def.rendering === 'binaural') {
+      const hrtf = def.hrtf as { id?: string } | undefined;
+      if (!hrtf || typeof hrtf.id !== 'string' || !manifest.has(hrtf.id)) problems.push(`binaural node '${def.id}' references hrtf asset '${String(hrtf?.id)}' missing from the manifest`);
     }
   }
   return { p, defs, connections, patternDefs, partDefs, manifest, problems };
 }
 
 /** @internal — phase 2 shared by importProject and Engine.render. */
-export async function resolveProjectAssets(defs: ProjectNode[], manifest: Map<string, { sampleRate: number; channels: number; frames: number; integrity: string }>, resolveAsset?: (id: string) => Promise<ArrayBuffer | ArrayBufferView>): Promise<Map<string, { bytes: ArrayBuffer | ArrayBufferView; decoded: DecodedWav }>> {
+export async function resolveProjectAssets(defs: ProjectNode[], manifest: Map<string, ProjectAsset & { kind: 'sample' | 'hrtf' }>, resolveAsset?: (id: string) => Promise<ArrayBuffer | ArrayBufferView>): Promise<Map<string, { bytes: ArrayBuffer | ArrayBufferView; decoded?: DecodedWav; hrtf?: HrtfAsset }>> {
   const sampleDefs = defs.filter(def => isObject(def) && def.type === 'sample');
-  const decodedAssets = new Map<string, { bytes: ArrayBuffer | ArrayBufferView; decoded: DecodedWav }>();
-  if (sampleDefs.length && !resolveAsset) {
-    throw new TuneError('PROJECT_INVALID', 'The project contains sample nodes but no resolveAsset callback was provided.', 'Pass { resolveAsset } returning the asset bytes by id.');
+  const hrtfIds = new Set<string>();
+  for (const def of defs) {
+    if (isObject(def) && def.type === 'spatial' && def.rendering === 'binaural' && isObject(def.hrtf) && typeof def.hrtf.id === 'string') hrtfIds.add(def.hrtf.id);
   }
+  const resolved = new Map<string, { bytes: ArrayBuffer | ArrayBufferView; decoded?: DecodedWav; hrtf?: HrtfAsset }>();
+  if ((sampleDefs.length || hrtfIds.size) && !resolveAsset) {
+    throw new TuneError('PROJECT_INVALID', 'The project references assets but no resolveAsset callback was provided.', 'Pass { resolveAsset } returning the asset bytes by id.');
+  }
+  const resolve = async (assetId: string) => {
+    try { return await resolveAsset!(assetId); }
+    catch (cause) { throw new TuneError('ASSET_FAILED', `Resolving asset '${assetId}' failed.`, 'Check the asset source and retry.', { cause }); }
+  };
   for (const def of sampleDefs) {
     const assetId = def.assetId as string;
-    if (decodedAssets.has(assetId)) continue;
+    if (resolved.has(assetId)) continue;
     const expected = manifest.get(assetId)!;
-    let bytes: ArrayBuffer | ArrayBufferView;
-    try { bytes = await resolveAsset!(assetId); }
-    catch (cause) { throw new TuneError('ASSET_FAILED', `Resolving asset '${assetId}' failed.`, 'Check the asset source and retry.', { cause }); }
+    const bytes = await resolve(assetId);
     let decoded: DecodedWav;
     try { decoded = decodeWav(bytes); }
     catch (cause) {
@@ -206,12 +231,31 @@ export async function resolveProjectAssets(defs: ProjectNode[], manifest: Map<st
       throw new TuneError('ASSET_FAILED', `Decoding asset '${assetId}' failed.`, 'Provide an intact PCM WAV file.', { cause });
     }
     const integrity = fnv1a64Float32(decoded.channels);
+    if (expected.kind !== 'sample') {
+      throw new TuneError('ASSET_FAILED', `Asset '${assetId}' is not a sample in the project manifest.`, 'Resolve the bytes recorded for this asset id.');
+    }
     if (decoded.sampleRate !== expected.sampleRate || decoded.channels.length !== expected.channels || decoded.frames !== expected.frames || integrity !== expected.integrity) {
       throw new TuneError('ASSET_FAILED', `Asset '${assetId}' does not match the project manifest (expected ${expected.sampleRate} Hz/${expected.channels}ch/${expected.frames} frames, got ${decoded.sampleRate} Hz/${decoded.channels.length}ch/${decoded.frames} frames).`, 'Resolve the bytes recorded for this asset id.');
     }
-    decodedAssets.set(assetId, { bytes, decoded });
+    resolved.set(assetId, { bytes, decoded });
   }
-  return decodedAssets;
+  for (const assetId of hrtfIds) {
+    if (resolved.has(assetId)) continue;
+    const expected = manifest.get(assetId)!;
+    const bytes = await resolve(assetId);
+    const integrity = fnv1a64Bytes(bytes);
+    if (integrity !== expected.integrity) {
+      throw new TuneError('ASSET_FAILED', `HRTF asset '${assetId}' does not match the project manifest (integrity ${integrity}, expected ${expected.integrity}).`, 'Resolve the bytes recorded for this asset id.');
+    }
+    let hrtf: HrtfAsset;
+    try { hrtf = decodeHrtfAsset(bytes); }
+    catch (cause) {
+      if (cause instanceof TuneError) throw cause;
+      throw new TuneError('ASSET_FAILED', `Decoding HRTF asset '${assetId}' failed.`, 'Provide an intact tunejs-hrtf file.', { cause });
+    }
+    resolved.set(assetId, { bytes, hrtf });
+  }
+  return resolved;
 }
 
 /** @internal — called by Engine.importProject. */
@@ -251,7 +295,11 @@ export async function importProject(engine: Engine, project: unknown, options: {
         case 'pan': node = engine.pan({ pan: def.params.pan }); break;
         case 'delay': node = engine.delay({ time: { seconds: def.timeSeconds }, feedback: def.feedback, taps: def.taps, mix: def.params.mix }); break;
         case 'reverb': node = engine.reverb({ decay: { seconds: def.decaySeconds }, mix: def.params.mix }); break;
-        case 'spatial': node = await engine.spatialSource({ rendering: 'stereo', position: def.position, direction: def.direction, distance: def.distance, cone: def.cone, smoothingSeconds: def.smoothingSeconds }); break;
+        case 'spatial': {
+          const hrtf = def.rendering === 'binaural' ? await engine.loadHrtf({ bytes: decodedAssets.get(def.hrtf!.id)!.bytes }) : undefined;
+          node = await engine.spatialSource({ rendering: def.rendering, hrtf, position: def.position, direction: def.direction, distance: def.distance, cone: def.cone, smoothingSeconds: def.smoothingSeconds });
+          break;
+        }
         default: throw new TuneError('PROJECT_INVALID', `Node '${(def as { id?: string }).id}' has unknown type.`, 'Fix the project data and retry.');
       }
       node.nodeId = def.id;

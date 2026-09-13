@@ -1,4 +1,5 @@
-import { BLOCK, ConvolverEffect, DelayEffect } from '../dsp.js';
+import { BinauralEffect, BLOCK, ConvolverEffect, DelayEffect } from '../dsp.js';
+import type { HrtfTable } from '../backend.js';
 import type { MixSource } from '../dsp.js';
 
 declare class AudioWorkletProcessor {
@@ -62,3 +63,61 @@ class TuneJsDspProcessor extends AudioWorkletProcessor {
   }
 }
 registerProcessor('tunejs-dsp', TuneJsDspProcessor);
+
+// tunejs-binaural: one emitter per node. `gain` is a-rate (distance × cone attenuation);
+// `azimuth`/`elevation` are k-rate degrees read once per block — the kernel owns the crossfade.
+class TuneJsBinauralProcessor extends AudioWorkletProcessor {
+  static get parameterDescriptors(): { name: string; defaultValue: number; minValue: number; maxValue: number; automationRate: string }[] {
+    return [
+      { name: 'gain', defaultValue: 1, minValue: 0, maxValue: 1, automationRate: 'a-rate' },
+      { name: 'azimuth', defaultValue: 0, minValue: 0, maxValue: 360, automationRate: 'k-rate' },
+      { name: 'elevation', defaultValue: 0, minValue: -90, maxValue: 90, automationRate: 'k-rate' },
+    ];
+  }
+  readonly #effect: BinauralEffect;
+  readonly #ins = [new Float64Array(BLOCK), new Float64Array(BLOCK)];
+  readonly #outs = [new Float64Array(BLOCK), new Float64Array(BLOCK)];
+  readonly #gain: MixSource = { valueAt: (t: number): number => this.#gainAt(t) };
+  readonly #azimuth: MixSource = { valueAt: (): number => this.#azimuthValue };
+  readonly #elevation: MixSource = { valueAt: (): number => this.#elevationValue };
+  #gainParam: ArrayLike<number> = [1];
+  #azimuthValue = 0;
+  #elevationValue = 0;
+  #t0 = 0;
+  #closed = false;
+  constructor(options?: { processorOptions?: unknown }) {
+    super(options);
+    const spec = options?.processorOptions as { hrtf: HrtfTable; smoothingFrames: number };
+    this.#effect = new BinauralEffect(spec.hrtf, spec.smoothingFrames);
+    this.port.onmessage = event => {
+      if ((event.data as { close?: boolean }).close) this.#closed = true;
+    };
+  }
+  #gainAt(t: number): number {
+    const p = this.#gainParam;
+    const i = Math.min(BLOCK - 1, Math.max(0, Math.round((t - this.#t0) * sampleRate)));
+    return p[Math.min(i, p.length - 1)]!;
+  }
+  process(inputs: Float32Array[][], outputs: Float32Array[][], parameters: Record<string, ArrayLike<number>>): boolean {
+    if (this.#closed) return false;
+    this.#t0 = currentTime;
+    this.#gainParam = parameters['gain'] ?? [1];
+    this.#azimuthValue = (parameters['azimuth'] ?? [0])[0]!;
+    this.#elevationValue = (parameters['elevation'] ?? [0])[0]!;
+    const input = inputs[0];
+    for (let c = 0; c < 2; c++) {
+      const src = input && input.length ? input[Math.min(c, input.length - 1)] : undefined;
+      const work = this.#ins[c]!;
+      if (src) for (let i = 0; i < BLOCK; i++) work[i] = src[i]!;
+      else work.fill(0);
+    }
+    this.#effect.process(this.#ins, this.#outs, this.#gain, this.#azimuth, this.#elevation, currentTime, sampleRate);
+    for (let c = 0; c < 2; c++) {
+      const dst = outputs[0]![c]!;
+      const work = this.#outs[c]!;
+      for (let i = 0; i < BLOCK; i++) dst[i] = work[i]!;
+    }
+    return true;
+  }
+}
+registerProcessor('tunejs-binaural', TuneJsBinauralProcessor);

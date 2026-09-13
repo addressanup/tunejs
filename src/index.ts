@@ -21,3 +21,6 @@ export { Bus, Pan, Delay, Reverb, syntheticReverbResponse } from './mixing.js';
 export { TuneError } from './errors.js';
 export type { ErrorCode } from './errors.js';
 export type { Adapter } from './backend.js';
+export { decodeHrtfAsset, encodeHrtfAsset, hrtfTableFor } from './hrtf.js';
+export type { HrtfAsset, HrtfHeader } from './hrtf.js';
+export type { HrtfTable } from './backend.js';

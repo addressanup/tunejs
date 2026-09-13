@@ -1,6 +1,6 @@
-import type { Adapter, HostContext, HostDspNode, HostParam, HostTap, HostTapChunk } from '../backend.js';
+import type { Adapter, HostBinauralNode, HostContext, HostDspNode, HostParam, HostTap, HostTapChunk, HrtfTable } from '../backend.js';
 import { TuneError, integerFrame } from '../errors.js';
-import { DSP_PROCESSOR_NAME, DSP_PROCESSOR_SOURCE } from './dsp-worklet-source.js';
+import { BINAURAL_PROCESSOR_NAME, DSP_PROCESSOR_NAME, DSP_PROCESSOR_SOURCE } from './dsp-worklet-source.js';
 import { TAP_PROCESSOR_NAME, TAP_PROCESSOR_SOURCE } from './tap-worklet.js';
 
 // One worklet module load per context; revoked after the module registers.
@@ -118,6 +118,22 @@ export function browserAdapter(): Adapter {
       },
       createConvolver(context: HostContext, spec: { response: Float32Array[] }) {
         return dspNode(context, { kind: 'convolver', response: spec.response, mix: 0 });
+      },
+      createBinaural(context: HostContext, spec: { hrtf: HrtfTable; smoothingFrames: number }): HostBinauralNode {
+        if (!dspReady.has(context)) {
+          throw new TuneError('HOST_FAILURE', 'TuneJS DSP processors are not loaded for this context.', 'Await engine.start() before creating effects.');
+        }
+        const node = new AudioWorkletNode(context as AudioContext, BINAURAL_PROCESSOR_NAME, {
+          numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2],
+          processorOptions: { hrtf: spec.hrtf, smoothingFrames: spec.smoothingFrames },
+        });
+        const binaural = node as AudioWorkletNode & HostBinauralNode;
+        // Real AudioParams — port messages are not delivered while an OfflineAudioContext renders.
+        Reflect.set(binaural, 'gain', node.parameters.get('gain') as HostParam);
+        Reflect.set(binaural, 'azimuth', node.parameters.get('azimuth') as HostParam);
+        Reflect.set(binaural, 'elevation', node.parameters.get('elevation') as HostParam);
+        binaural.close = () => { node.port.postMessage({ close: true }); };
+        return binaural;
       },
     },
   };

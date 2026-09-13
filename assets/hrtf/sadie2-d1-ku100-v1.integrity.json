@@ -1,0 +1,10 @@
+{
+  "integrity": "fnv1a64:cfe6f2072d51ead1",
+  "bytes": 1627307,
+  "positions": 794,
+  "taps": 256,
+  "rates": [
+    44100,
+    48000
+  ]
+}

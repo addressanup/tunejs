@@ -7,6 +7,8 @@ import { Instrument } from './instrument.js';
 import type { InstrumentPreset } from './instrument.js';
 import { Sample } from './sample.js';
 import type { SampleAsset, SampleEntry } from './sample.js';
+import { decodeHrtfAsset } from './hrtf.js';
+import type { HrtfAsset } from './hrtf.js';
 import { Bus, Delay, Pan, Reverb, mulberry32 } from './mixing.js';
 import { Kit } from './kit.js';
 import type { KitPreset } from './kit.js';
@@ -22,6 +24,8 @@ import type { RenderResult } from './render.js';
 import type { ProjectV1 } from './project.js';
 import type { HostBuffer, HostGain } from './backend.js';
 export type EngineState = 'idle' | 'starting' | 'running' | 'suspended' | 'interrupted' | 'failed' | 'disposed';
+interface HrtfEntry { id: string; asset: HrtfAsset; bytes: ArrayBuffer | ArrayBufferView; refs: Set<SpatialSource> }
+const hrtfBytes = (asset: HrtfAsset): number => [...asset.tables.values()].reduce((n, t) => n + t.rows.reduce((m, r) => m + r.byteLength, 0), 0);
 
 export class Engine {
   /** Deterministic TuneJS-DSP offline render of a project — identical output on every host. */
@@ -46,6 +50,7 @@ export class Engine {
   #master?: HostGain;
   #noiseBuffers = new Map<number, HostBuffer>();
   #assets = new Map<string, SampleEntry>();
+  #hrtfAssets = new Map<string, HrtfEntry>();
   #state: EngineState = 'idle';
   #starting?: Promise<void>;
   #suspending?: Promise<void>;
@@ -55,7 +60,7 @@ export class Engine {
     this.transport = new Transport(this);
     this.listener = new Listener(this);
     const fanOut = this.adapter.hostLimits.fanOut;
-    this.capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, kits: true, transport: true, patterns: true, fanOut, delay: fanOut || !!this.adapter.dsp, reverb: fanOut || !!this.adapter.dsp, spatial: true, binaural: false, stereoSpatial: true, taps: !!this.adapter.tapping, capture: !!this.adapter.capture, recorder: !!this.adapter.tapping, meters: !!this.adapter.tapping, projects: true, offline: false, backgroundPlayback: false });
+    this.capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, kits: true, transport: true, patterns: true, fanOut, delay: fanOut || !!this.adapter.dsp, reverb: fanOut || !!this.adapter.dsp, spatial: true, binaural: !!this.adapter.dsp, stereoSpatial: true, taps: !!this.adapter.tapping, capture: !!this.adapter.capture, recorder: !!this.adapter.tapping, meters: !!this.adapter.tapping, projects: true, offline: false, backgroundPlayback: false });
   }
   get state(): EngineState {
     if (this.#state === 'running' && this.#context?.state !== 'running') return this.#context?.state === 'suspended' ? 'suspended' : 'interrupted';
@@ -65,8 +70,9 @@ export class Engine {
   get sampleRate(): number | null { return this.#context?.sampleRate ?? null; }
   get currentFrame(): number { return this.#context ? Math.round(this.#context.currentTime * this.#context.sampleRate) : 0; }
   /** @internal */ hostTimeAt(frame: number): number { return this.adapter.hostTime(integerFrame(frame, 'frame'), this.#context!.sampleRate); }
+  /** `cachedAssetBytes` counts decoded PCM of cached samples plus the float32 tables of cached HRTF assets. */
   get diagnostics() {
-    return { state: this.state, backend: this.adapter.name, sampleRate: this.#context?.sampleRate ?? null, nodes: this.nodes.size, voices: this.voices.size, cachedAssetBytes: [...this.#assets.values()].reduce((bytes, entry) => bytes + entry.decoded.channels.reduce((total, channel) => total + channel.length, 0) * 4, 0), taps: this.taps.size, underruns: null, outputLatencySeconds: null };
+    return { state: this.state, backend: this.adapter.name, sampleRate: this.#context?.sampleRate ?? null, nodes: this.nodes.size, voices: this.voices.size, cachedAssetBytes: [...this.#assets.values()].reduce((bytes, entry) => bytes + entry.decoded.channels.reduce((total, channel) => total + channel.length, 0) * 4, 0) + [...this.#hrtfAssets.values()].reduce((bytes, entry) => bytes + hrtfBytes(entry.asset), 0), taps: this.taps.size, underruns: null, outputLatencySeconds: null };
   }
   readonly capabilities;
   /** @internal */ assertAlive(): void { if (this.#state === 'disposed') throw new TuneError('DISPOSED', 'Engine is disposed.', 'Create a new engine.'); }
@@ -295,6 +301,64 @@ export class Engine {
     }
     return this.add(new Sample(this, entry));
   }
+  /**
+   * Load a tunejs-hrtf-v1 asset (see docs/hrtf-asset.md) — `{ bytes }` of the file or `{ url }` to
+   * fetch. Cached by `id` (defaults to the asset's own header id); counted in
+   * `diagnostics.cachedAssetBytes`; released by `clearAssets()` once no spatial source references
+   * it, or by `dispose()`. `signal` aborts the fetch/decode with a CANCELLED error.
+   */
+  async loadHrtf(options: { id?: string; url?: string; bytes?: ArrayBuffer | ArrayBufferView; signal?: AbortSignal }): Promise<HrtfAsset> {
+    this.assertAlive();
+    if (typeof options !== 'object' || options === null) {
+      throw new TuneError('INVALID_VALUE', 'loadHrtf() requires options.', 'Pass { bytes } or { url } and optionally { id, signal }.');
+    }
+    if ((options.bytes === undefined) === (options.url === undefined)) {
+      throw new TuneError('INVALID_VALUE', 'An HRTF asset needs exactly one of bytes or url.', 'Provide the .tjhrtf bytes or a URL, not both.');
+    }
+    const signal = options.signal;
+    const cancelled = () => new TuneError('CANCELLED', `Loading HRTF asset '${options.id ?? options.url}' was cancelled.`, 'Retry with a signal that has not aborted.');
+    if (signal?.aborted) throw cancelled();
+    let entry = options.id ? this.#hrtfAssets.get(options.id) : undefined;
+    if (!entry) {
+      const check = () => { this.assertAlive(); if (signal?.aborted) throw cancelled(); };
+      let bytes = options.bytes;
+      if (bytes === undefined) {
+        if (typeof globalThis.fetch !== 'function') throw new TuneError('UNSUPPORTED', 'This host cannot fetch URL assets.', 'Pass the .tjhrtf bytes instead.');
+        let response;
+        try { response = await globalThis.fetch(options.url!, { signal }); }
+        catch (cause) {
+          if (signal?.aborted) throw cancelled();
+          throw new TuneError('ASSET_FAILED', `Fetching HRTF asset '${options.id ?? options.url}' failed.`, 'Check the URL and network.', { cause });
+        }
+        check();
+        if (!response.ok) throw new TuneError('ASSET_FAILED', `Fetching HRTF asset '${options.id ?? options.url}' returned HTTP ${response.status}.`, 'Check the URL and asset deployment.');
+        try { bytes = await response.arrayBuffer(); }
+        catch (cause) {
+          if (signal?.aborted) throw cancelled();
+          throw new TuneError('ASSET_FAILED', `Reading HRTF asset '${options.id ?? options.url}' failed.`, 'Check the URL and network.', { cause });
+        }
+        check();
+      }
+      let asset: HrtfAsset;
+      try { asset = decodeHrtfAsset(bytes); }
+      catch (cause) {
+        if (cause instanceof TuneError) throw new TuneError('ASSET_FAILED', `HRTF asset '${options.id ?? '(unnamed)'}': ${cause.message}`, 'Provide an intact tunejs-hrtf file.', { cause });
+        throw cause;
+      }
+      check();
+      const id = options.id ?? asset.id;
+      const existing = this.#hrtfAssets.get(id);
+      if (existing) entry = existing;
+      else {
+        entry = { id, asset, bytes, refs: new Set() };
+        this.#hrtfAssets.set(id, entry);
+      }
+    }
+    return entry.asset;
+  }
+  /** @internal */ retainHrtf(asset: HrtfAsset, source: SpatialSource): void { this.#hrtfAssets.get(asset.id)?.refs.add(source); }
+  /** @internal */ releaseHrtf(asset: HrtfAsset, source: SpatialSource): void { this.#hrtfAssets.get(asset.id)?.refs.delete(source); }
+  /** @internal */ hrtfBytes(asset: HrtfAsset): ArrayBuffer | ArrayBufferView { const entry = this.#hrtfAssets.get(asset.id); return entry ? entry.bytes : new Uint8Array(0); }
   bus(options: { gainDb?: number } = {}): Bus {
     this.assertAlive();
     return this.add(new Bus(this, options.gainDb ?? 0));
@@ -319,6 +383,12 @@ export class Engine {
       if (!entry.refs.size) {
         released += entry.decoded.channels.reduce((total, channel) => total + channel.length, 0) * 4;
         this.#assets.delete(id);
+      }
+    }
+    for (const [id, entry] of this.#hrtfAssets) {
+      if (!entry.refs.size) {
+        released += hrtfBytes(entry.asset);
+        this.#hrtfAssets.delete(id);
       }
     }
     return released;
@@ -351,6 +421,7 @@ export class Engine {
       for (const voice of [...this.voices]) try { voice.dispose(); } catch (error) { errors.push(error); }
       for (const node of [...this.nodes]) try { node.dispose(); } catch (error) { errors.push(error); }
       this.#assets.clear();
+      this.#hrtfAssets.clear();
       this.#noiseBuffers.clear();
       try { master?.disconnect(); } catch (error) { errors.push(error); }
       try { await this.#context?.close(); } catch (error) { errors.push(error); }

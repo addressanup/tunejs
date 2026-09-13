@@ -1,6 +1,8 @@
 import { encodeWav, resample } from './assets.js';
-import { BLOCK, Biquad, ConvolverEffect, DelayEffect, Timeline, biquadCoeffs, delayFramesFor, noiseBufferData, oscillatorValue } from './dsp.js';
-import type { BiquadCoeffs } from './dsp.js';
+import { BLOCK, BinauralEffect, Biquad, ConvolverEffect, DelayEffect, Timeline, biquadCoeffs, delayFramesFor, noiseBufferData, oscillatorValue } from './dsp.js';
+import type { BiquadCoeffs, MixSource } from './dsp.js';
+import { hrtfTableFor } from './hrtf.js';
+import type { HrtfAsset } from './hrtf.js';
 import { TuneError, finite } from './errors.js';
 import { adsValueAt, envelopeEvents, noteToFrequency } from './instrument.js';
 import type { Envelope, InstrumentLayer } from './instrument.js';
@@ -50,7 +52,11 @@ interface Runtime {
   filterType?: 'lowpass' | 'highpass';
   biquads: Biquad[];
   effect?: DelayEffect | ConvolverEffect;
-  spatial?: { pan: number; gain: number };
+  spatial?: { pan: number; gain: number; bearingDegrees: number; elevationDegrees: number };
+  binauralEffect?: BinauralEffect;
+  gainSource?: MixSource;
+  azimuthSource?: MixSource;
+  elevationSource?: MixSource;
   oscPhase?: number;
   maxVoices: number;
   live: Voice[];
@@ -118,11 +124,13 @@ export async function renderProject(project: unknown, options: {
   const frames = (toFrame - fromFrame) + Math.round(tailSeconds * sampleRate);
   if (frames / sampleRate > maxSeconds) throw new TuneError('INVALID_VALUE', `Render exceeds the ${maxSeconds} s cap.`, 'Shorten the range or raise maxSeconds.');
   const decoded = await resolveProjectAssets(defs, manifest, options.resolveAsset);
+  const hrtfs = new Map<string, HrtfAsset>();
   const assets = new Map<string, { channels: Float64Array[]; frames: number }>();
   for (const [id, entry] of decoded) {
-    const channels = entry.decoded.sampleRate === sampleRate
-      ? entry.decoded.channels.map(c => Float64Array.from(c))
-      : resample(entry.decoded.channels, entry.decoded.sampleRate, sampleRate).map(c => Float64Array.from(c));
+    if (entry.hrtf) { hrtfs.set(id, entry.hrtf); continue; }
+    const channels = entry.decoded!.sampleRate === sampleRate
+      ? entry.decoded!.channels.map(c => Float64Array.from(c))
+      : resample(entry.decoded!.channels, entry.decoded!.sampleRate, sampleRate).map(c => Float64Array.from(c));
     assets.set(id, { channels, frames: channels[0]!.length });
   }
   // Runtimes.
@@ -141,6 +149,14 @@ export async function renderProject(project: unknown, options: {
       case 'spatial': {
         rt.channels = 2;
         rt.spatial = stereoRender({ position: p.listener.position, forward: p.listener.forward, up: p.listener.up }, { position: def.position, direction: def.direction, distanceModel: def.distance, cone: def.cone });
+        if (def.rendering === 'binaural') {
+          const asset = hrtfs.get(def.hrtf!.id);
+          rt.binauralEffect = new BinauralEffect(hrtfTableFor(asset!, sampleRate), Math.max(1, Math.round(def.smoothingSeconds * sampleRate)));
+          // Static pose: constant MixSources on the spatial result.
+          rt.gainSource = { valueAt: () => rt.spatial!.gain };
+          rt.azimuthSource = { valueAt: () => rt.spatial!.bearingDegrees };
+          rt.elevationSource = { valueAt: () => rt.spatial!.elevationDegrees };
+        }
         break;
       }
       default: break;
@@ -329,6 +345,10 @@ export async function renderProject(project: unknown, options: {
           break;
         }
         case 'pan': case 'spatial': {
+          if (def.type === 'spatial' && def.rendering === 'binaural') {
+            rt.binauralEffect!.process(blockIn(rt, blockLen), rt.out, rt.gainSource!, rt.azimuthSource!, rt.elevationSource!, t0, sampleRate, blockLen);
+            break;
+          }
           const input = blockIn(rt, blockLen);
           const [L, R] = rt.out;
           for (let i = 0; i < blockLen; i++) {

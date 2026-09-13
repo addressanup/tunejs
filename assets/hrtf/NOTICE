@@ -1,0 +1,15 @@
+TuneJS binaural HRTF asset — sadie2-d1-ku100-v1.tjhrtf
+
+Prepared from the SADIE II Database, release v2-2, subject D1 (Neumann KU100
+dummy head), courtesy of the University of York Audio Lab.
+https://www.york.ac.uk/sadie-project/database.html
+
+Licence: Apache License 2.0 (redistributed here in modified form —
+downsampled to a 5°/15° grid and repacked into the tunejs-hrtf-v1 binary
+container; no gain normalization).
+
+Citation for academic use:
+  Armstrong, C., Thresh, L., Murphy, D., Kearney, G. — "A Perceptual
+  Evaluation of Individual and Non-Individual HRTFs: A Case Study of the
+  SADIE II Database", Applied Sciences 8(11):2029, 2018.
+  doi:10.3390/app8112029

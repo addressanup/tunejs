@@ -1,4 +1,4 @@
-import type { Adapter, HostContext, HostDspNode, HostNode, HostParam, HostTap, HostTapChunk } from '../backend.js';
+import type { Adapter, HostBinauralNode, HostContext, HostDspNode, HostNode, HostParam, HostTap, HostTapChunk, HrtfTable } from '../backend.js';
 import { TuneError, integerFrame } from '../errors.js';
 import { Timeline } from '../dsp.js';
 import { createDspCallback, createTapCallback } from '../worklet/native.js';
@@ -67,6 +67,45 @@ export function nativeAdapter(createContext: () => HostContext, options?: { work
     return dsp;
   }
 
+  // Binaural: one Synchronizable carrying three automation timelines (gain a-rate, azimuth and
+  // elevation k-rate); every param op bumps the shared version and pushes all three lists.
+  function binauralNode(context: HostContext, spec: { hrtf: HrtfTable; smoothingFrames: number }): HostBinauralNode {
+    if (!loaded.has(context)) {
+      throw new TuneError('HOST_FAILURE', 'TuneJS DSP processors are not loaded for this context.', 'Await engine.start() before creating effects.');
+    }
+    const gain = new Timeline(); const azimuth = new Timeline(); const elevation = new Timeline();
+    let version = 0;
+    let last: { version: number; gain: ReturnType<Timeline['events']>; azimuth: ReturnType<Timeline['events']>; elevation: ReturnType<Timeline['events']>; closed: boolean } = { version, gain: [], azimuth: [], elevation: [], closed: false };
+    const sync = worklets!.createSynchronizable(last);
+    const node = (context as unknown as { createWorkletProcessingNode: WorkletNodeFactory })
+      .createWorkletProcessingNode(createDspCallback(`dsp${nodeSeq++}`, { kind: 'binaural', hrtf: spec.hrtf, smoothingFrames: spec.smoothingFrames }, sync, context.sampleRate), 'AudioRuntime');
+    const keep = keepAlive(context, node);
+    const push = () => { last = { version: ++version, gain: gain.events(), azimuth: azimuth.events(), elevation: elevation.events(), closed: false }; sync.setBlocking(last); };
+    const param = (timeline: Timeline): HostParam => ({
+      value: 0,
+      setValueAtTime(v: number, t: number) { this.value = v; timeline.set(v, t); push(); },
+      linearRampToValueAtTime(v: number, t: number) { this.value = v; timeline.ramp(v, t); push(); },
+      cancelScheduledValues(t: number) { timeline.cancel(t); push(); },
+    });
+    const binaural = node as HostNode & HostBinauralNode;
+    Reflect.set(binaural, 'gain', param(gain));
+    Reflect.set(binaural, 'azimuth', param(azimuth));
+    Reflect.set(binaural, 'elevation', param(elevation));
+    let closed = false;
+    binaural.close = () => {
+      if (closed) return;
+      closed = true;
+      sync.setBlocking({ ...last, closed: true });
+    };
+    const disconnect = node.disconnect.bind(node);
+    binaural.disconnect = () => {
+      disconnect();
+      try { keep.stop(); } catch { /* already stopped */ }
+      try { keep.disconnect(); } catch { /* already detached */ }
+    };
+    return binaural;
+  }
+
   async function createTap(context: HostContext, options: { chunkFrames: number; inFlightChunks: number }): Promise<HostTap> {
     const sync = worklets!.createSynchronizable({ acked: 0, closing: false });
     let handler: ((chunk: HostTapChunk) => void) | null = null;
@@ -129,6 +168,9 @@ export function nativeAdapter(createContext: () => HostContext, options?: { work
         },
         createConvolver(context: HostContext, spec: { response: Float32Array[] }) {
           return dspNode(context, { kind: 'convolver', response: spec.response });
+        },
+        createBinaural(context: HostContext, spec: { hrtf: HrtfTable; smoothingFrames: number }) {
+          return binauralNode(context, spec);
         },
       },
       tapping: { createTap },

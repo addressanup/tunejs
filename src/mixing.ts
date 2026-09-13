@@ -1,4 +1,5 @@
-import type { HostContext, HostConvolver, HostDelay, HostGain, HostNode, HostPanner } from './backend.js';
+import type { HostContext, HostConvolver, HostDelay, HostDspNode, HostGain, HostNode, HostPanner } from './backend.js';
+import { delayFramesFor, mulberry32 } from './dsp.js';
 import type { Engine } from './engine.js';
 import { TuneError, finite } from './errors.js';
 import { GraphNode, Param } from './graph.js';
@@ -54,8 +55,9 @@ export class Delay extends GraphNode {
   readonly feedback: number;
   readonly taps: number;
   readonly mix: Param;
-  #input?: HostGain;
+  #input?: HostNode;
   #internals: HostNode[] = [];
+  #dsp?: HostDspNode;
   /** @internal */ constructor(engine: Engine, options: { time?: Seconds; feedback?: number; mix?: number; taps?: number }) {
     super(engine, 'delay');
     this.timeSeconds = finite(options.time?.seconds ?? 0.25, 0.001, 5, 'delay time seconds');
@@ -68,6 +70,14 @@ export class Delay extends GraphNode {
   }
   /** @internal */ override get input(): HostNode | undefined { return this.#input; }
   /** @internal */ override prepare(context: HostContext): void {
+    const dsp = this.engine.adapter.dsp;
+    if (dsp) {
+      // TuneJS-owned processor: dry at unity + mix·wet inside one node; stereo output.
+      const node = dsp.createDelay(context, { delayFrames: delayFramesFor(this.timeSeconds, context.sampleRate), taps: this.taps, feedback: this.feedback });
+      this.mix.bind(node.mix);
+      this.#dsp = node; this.#input = node; this.host = node;
+      return;
+    }
     const created: HostNode[] = [];
     const now = this.engine.currentTime;
     try {
@@ -98,6 +108,7 @@ export class Delay extends GraphNode {
   override dispose(): void {
     this.mix.bind();
     const errors: unknown[] = [];
+    if (this.#dsp) { try { this.#dsp.close(); } catch (error) { errors.push(error); } this.#dsp = undefined; }
     for (const node of this.#internals) try { node.disconnect(); } catch (error) { errors.push(error); }
     this.#internals = []; this.#input = undefined;
     try { super.dispose(); } catch (error) { errors.push(error); }
@@ -105,10 +116,7 @@ export class Delay extends GraphNode {
   }
 }
 
-/** @internal */ export function mulberry32(seed: number) {
-  let state = seed >>> 0;
-  return () => { state = (state + 0x6D2B79F5) >>> 0; let t = state; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-}
+/** @internal */ export { mulberry32 }
 
 // synthetic-convolution-v1: two channels of seeded mulberry32 noise decaying −60 dB over `decaySeconds`
 // (exp(-3·ln10·i/frames)), energy-normalized per channel (Σx² = 1). Deterministic per (decay, sampleRate).
@@ -129,8 +137,9 @@ export function syntheticReverbResponse(decaySeconds: number, sampleRate: number
 export class Reverb extends GraphNode {
   readonly decaySeconds: number;
   readonly mix: Param;
-  #input?: HostGain;
+  #input?: HostNode;
   #internals: HostNode[] = [];
+  #dsp?: HostDspNode;
   /** @internal */ constructor(engine: Engine, options: { decay?: Seconds; mix?: number }) {
     super(engine, 'reverb');
     this.decaySeconds = finite(options.decay?.seconds ?? 2, 0.1, 10, 'reverb decay seconds');
@@ -138,6 +147,13 @@ export class Reverb extends GraphNode {
   }
   /** @internal */ override get input(): HostNode | undefined { return this.#input; }
   /** @internal */ override prepare(context: HostContext): void {
+    const dsp = this.engine.adapter.dsp;
+    if (dsp) {
+      const node = dsp.createConvolver(context, { response: syntheticReverbResponse(this.decaySeconds, context.sampleRate) });
+      this.mix.bind(node.mix);
+      this.#dsp = node; this.#input = node; this.host = node;
+      return;
+    }
     const created: HostNode[] = [];
     const now = this.engine.currentTime;
     try {
@@ -165,6 +181,7 @@ export class Reverb extends GraphNode {
   override dispose(): void {
     this.mix.bind();
     const errors: unknown[] = [];
+    if (this.#dsp) { try { this.#dsp.close(); } catch (error) { errors.push(error); } this.#dsp = undefined; }
     for (const node of this.#internals) try { node.disconnect(); } catch (error) { errors.push(error); }
     this.#internals = []; this.#input = undefined;
     try { super.dispose(); } catch (error) { errors.push(error); }

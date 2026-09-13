@@ -214,3 +214,66 @@ test('host fan-out limit rejects a second outgoing edge and disables parallel ef
  assert.equal(e2.diagnostics.nodes,before);
  await e.dispose();await e2.dispose();
 });
+
+// TuneJS DSP path: a fake HostDsp over the fanOut:false adapter. Nodes record calls.
+function dspHost(){
+  const h=host();
+  const created=[];
+  const mknode=()=>({connections:[],disconnects:0,connect(t){this.connections.push(t);},disconnect(){this.disconnects++;}});
+  const cache=new WeakMap();
+  const dsp={
+    loads:0,
+    load(context){let p=cache.get(context);if(!p){this.loads++;p=Promise.resolve().then(()=>{});cache.set(context,p);}return p;}, // cached per context, resolves on a later microtask
+    createDelay(context,spec){const n={...mknode(),kind:'delay',spec,closes:0,mix:{value:0,calls:[],setValueAtTime(v,t){this.calls.push(['set',v,t]);this.value=v;},linearRampToValueAtTime(v,t){this.calls.push(['ramp',v,t]);this.value=v;},cancelScheduledValues(t){this.calls.push(['cancel',t]);}},close(){this.closes++;}};created.push(n);return n;},
+    createConvolver(context,spec){const n={...mknode(),kind:'convolver',spec,closes:0,mix:{value:0,calls:[],setValueAtTime(v,t){this.calls.push(['set',v,t]);this.value=v;},linearRampToValueAtTime(v,t){this.calls.push(['ramp',v,t]);this.value=v;},cancelScheduledValues(t){this.calls.push(['cancel',t]);}},close(){this.closes++;}};created.push(n);return n;},
+  };
+  const engine=new Engine({adapter:{...h.adapter,hostLimits:{fanOut:false},dsp}});
+  return {engine,h,dsp,created};
+}
+
+test('dsp path enables effects on a fan-out-limited host and prepares once after start',async()=>{
+  const {engine:e,dsp,created}=dspHost();
+  assert.equal(e.capabilities.delay,true);assert.equal(e.capabilities.reverb,true);
+  const s=e.oscillator();const d=e.delay({time:{seconds:0.01},feedback:0.5,taps:3});
+  const r=e.reverb({decay:{seconds:0.5}});
+  s.connect(d).connect(r).connect(e.output);
+  assert.equal(created.length,0,'nothing prepared before start');
+  await e.start();
+  assert.equal(dsp.loads,1);
+  assert.equal(created.length,2);
+  assert.equal(created[0].kind,'delay');assert.equal(created[1].kind,'convolver');
+  assert.equal(created[0].spec.delayFrames,480);assert.equal(created[0].spec.taps,3);
+  assert.equal(created[1].spec.response.length,2);
+  assert.equal(d.input,created[0]);assert.equal(d.host,created[0]);
+  assert.ok(s.host.connections.includes(created[0]),'source lands on the DSP node');
+  assert.ok(created[0].connections.includes(created[1]),'delay feeds reverb');
+  assert.ok(created[1].connections.includes(e.output.host),'reverb feeds the master gain');
+  // suspend + restart: load promise is cached per context; no second create.
+  await e.suspend();await e.start();
+  assert.equal(dsp.loads,1,'load cached per context');
+  assert.equal(created.length,2,'nodes still prepared once');
+  // dispose closes each DSP node once and disconnects it.
+  d.dispose();
+  assert.equal(created[0].closes,1);assert.ok(created[0].disconnects>=1);
+  await e.dispose();
+  assert.equal(created[1].closes,1);assert.ok(created[1].disconnects>=1);
+  assert.equal(e.diagnostics.nodes,0);
+});
+
+test('a delay created while start() awaits the DSP module is prepared exactly once',async()=>{
+  const {engine:e,created}=dspHost();
+  const pending=e.start();
+  const d=e.delay();e.oscillator().connect(d).connect(e.output);
+  await pending;
+  assert.equal(created.length,1,'prepared exactly once by the activation chain');
+  await e.dispose();
+});
+
+test('without a dsp adapter the fan-out-limited host still rejects effects',async()=>{
+  const limited=host();
+  const e=new Engine({adapter:{...limited.adapter,hostLimits:{fanOut:false}}});
+  assert.equal(e.capabilities.delay,false);assert.equal(e.capabilities.reverb,false);
+  assert.throws(()=>e.delay(),code('UNSUPPORTED'));
+  assert.throws(()=>e.reverb(),code('UNSUPPORTED'));
+  await e.dispose();
+});

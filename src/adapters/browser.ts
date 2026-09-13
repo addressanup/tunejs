@@ -1,5 +1,6 @@
-import type { Adapter, HostContext, HostTap, HostTapChunk } from '../backend.js';
+import type { Adapter, HostContext, HostDspNode, HostParam, HostTap, HostTapChunk } from '../backend.js';
 import { TuneError, integerFrame } from '../errors.js';
+import { DSP_PROCESSOR_NAME, DSP_PROCESSOR_SOURCE } from './dsp-worklet-source.js';
 import { TAP_PROCESSOR_NAME, TAP_PROCESSOR_SOURCE } from './tap-worklet.js';
 
 // One worklet module load per context; revoked after the module registers.
@@ -47,6 +48,24 @@ async function createTap(context: HostContext, options: { chunkFrames: number; i
   return tap;
 }
 
+// One TuneJS DSP module load per context; create* are synchronous and require load() resolved.
+const dspLoads = new WeakMap<HostContext, Promise<void>>();
+const dspReady = new WeakSet<HostContext>();
+function dspNode(context: HostContext, processorOptions: unknown): HostDspNode {
+  if (!dspReady.has(context)) {
+    throw new TuneError('HOST_FAILURE', 'TuneJS DSP processors are not loaded for this context.', 'Await engine.start() before creating effects.');
+  }
+  const node = new AudioWorkletNode(context as AudioContext, DSP_PROCESSOR_NAME, {
+    numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2], processorOptions,
+  });
+  const dsp = node as AudioWorkletNode & HostDspNode;
+  // `mix` is the processor's a-rate AudioParam — port messages are not delivered while an
+  // OfflineAudioContext renders, so the HostParam must be the real automation target.
+  Reflect.set(dsp, 'mix', node.parameters.get('mix') as HostParam);
+  dsp.close = () => { node.port.postMessage({ close: true }); };
+  return dsp;
+}
+
 async function capture(context: HostContext, options: { kind: 'microphone'; signal?: AbortSignal }): Promise<{ node: globalThis.AudioNode; stop(): void }> {
   const devices = globalThis.navigator?.mediaDevices;
   if (!devices?.getUserMedia) throw new TuneError('UNSUPPORTED', 'Microphone capture is unavailable on this host.', 'Use a browser with mediaDevices.getUserMedia support.');
@@ -80,5 +99,26 @@ export function browserAdapter(): Adapter {
     hostTime(frame, sampleRate) { return integerFrame(frame, 'frame') / sampleRate; },
     tapping: { createTap },
     capture,
+    dsp: {
+      load(context: HostContext): Promise<void> {
+        const worklet = (context as AudioContext).audioWorklet;
+        if (typeof worklet?.addModule !== 'function') {
+          return Promise.reject(new TuneError('UNSUPPORTED', 'AudioWorklet is unavailable on this host.', 'Use a browser with AudioWorklet support for TuneJS DSP effects.'));
+        }
+        let load = dspLoads.get(context);
+        if (!load) {
+          const url = URL.createObjectURL(new Blob([DSP_PROCESSOR_SOURCE], { type: 'text/javascript' }));
+          load = worklet.addModule(url).then(() => { dspReady.add(context); }).finally(() => URL.revokeObjectURL(url));
+          dspLoads.set(context, load);
+        }
+        return load;
+      },
+      createDelay(context: HostContext, spec: { delayFrames: number; taps: number; feedback: number }) {
+        return dspNode(context, { kind: 'delay', delayFrames: spec.delayFrames, taps: spec.taps, feedback: spec.feedback, mix: 0 });
+      },
+      createConvolver(context: HostContext, spec: { response: Float32Array[] }) {
+        return dspNode(context, { kind: 'convolver', response: spec.response, mix: 0 });
+      },
+    },
   };
 }

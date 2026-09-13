@@ -73,7 +73,7 @@ export interface HostDspNode extends HostNode { readonly mix: HostParam; close()
  */
 export interface HostDsp {
   load(context: HostContext): Promise<void>;
-  /** Feedforward echo: wet = Σ_{k=1..taps} feedback^k · x[n − k·delayFrames]; channel count follows the input (1 or 2). */
+  /** Feedforward echo: wet = Σ_{k=1..taps} feedback^k · x[n − k·delayFrames]; output is stereo, mono input feeds both channels. */
   createDelay(context: HostContext, spec: { delayFrames: number; taps: number; feedback: number }): HostDspNode;
   /** Convolution with `response` (1 or 2 channels at the context rate); mono input feeds both ears; output is stereo. */
   createConvolver(context: HostContext, spec: { response: Float32Array[] }): HostDspNode;

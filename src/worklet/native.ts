@@ -6,10 +6,13 @@ import { tunejsNativeKernel } from './native-kernel.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type SyncCell<T> = { getDirty(): T; getBlocking(): T };
-type DspSync = { version: number; events: { t: number; v: number; ramp: boolean }[]; closed: boolean };
+type TimelineEvent = { t: number; v: number; ramp: boolean };
+// Binaural nodes carry three timelines (gain/azimuth/elevation); delay/convolver carry `events`.
+type DspSync = { version: number; events?: TimelineEvent[]; gain?: TimelineEvent[]; azimuth?: TimelineEvent[]; elevation?: TimelineEvent[]; closed: boolean };
 type DspSpec =
   | { kind: 'delay'; delayFrames: number; taps: number; feedback: number }
-  | { kind: 'convolver'; response: ArrayLike<number>[] };
+  | { kind: 'convolver'; response: ArrayLike<number>[] }
+  | { kind: 'binaural'; hrtf: unknown; smoothingFrames: number };
 
 export function createDspCallback(id: string, spec: DspSpec, sync: SyncCell<DspSync>, sampleRate: number) {
   return (inputData: Float32Array[], outputData: Float32Array[], framesToProcess: number, currentTime: number): void => {
@@ -30,21 +33,31 @@ export function createDspCallback(id: string, spec: DspSpec, sync: SyncCell<DspS
       state = registry[id] = {
         version: -1,
         timeline: new kernel.Timeline(),
+        azimuth: new kernel.Timeline(),
+        elevation: new kernel.Timeline(),
         effect: spec.kind === 'delay'
           ? new kernel.DelayEffect(2, spec.delayFrames, spec.taps, spec.feedback)
-          : new kernel.ConvolverEffect(spec.response),
+          : spec.kind === 'convolver'
+            ? new kernel.ConvolverEffect(spec.response)
+            : new kernel.BinauralEffect(spec.hrtf, spec.smoothingFrames),
         ins: [new Float64Array(kernel.BLOCK), new Float64Array(kernel.BLOCK)],
         outs: [new Float64Array(kernel.BLOCK), new Float64Array(kernel.BLOCK)],
       };
     }
-    if (p.version !== state.version) { state.timeline.load(p.events); state.version = p.version; }
+    if (p.version !== state.version) {
+      if (spec.kind === 'binaural') {
+        state.timeline.load(p.gain ?? []); state.azimuth.load(p.azimuth ?? []); state.elevation.load(p.elevation ?? []);
+      } else state.timeline.load(p.events ?? []);
+      state.version = p.version;
+    }
     for (let c = 0; c < 2; c++) {
       const src = inputData[Math.min(c, inputData.length - 1)];
       const work = state.ins[c];
       if (src) for (let i = 0; i < framesToProcess; i++) work[i] = src[i];
       else work.fill(0, 0, framesToProcess);
     }
-    state.effect.process(state.ins, state.outs, state.timeline, currentTime, sampleRate, framesToProcess);
+    if (spec.kind === 'binaural') state.effect.process(state.ins, state.outs, state.timeline, state.azimuth, state.elevation, currentTime, sampleRate, framesToProcess);
+    else state.effect.process(state.ins, state.outs, state.timeline, currentTime, sampleRate, framesToProcess);
     for (let c = 0; c < outputData.length; c++) {
       const dst = outputData[c]!;
       const work = state.outs[c]!;

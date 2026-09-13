@@ -296,3 +296,41 @@ test('native tap drops consume no sequence number; sequences stay contiguous', a
   assert.equal(chunks[2].sequence, 2, 'delivered sequences contiguous after drops');
   assert.equal(chunks[2].droppedFramesBefore, 3072);
 });
+
+test('native binaural node: front and right programs vs the reference', async () => {
+  const { syntheticHrtfTable, binauralProgram, binauralFixtureExpected, binauralSmoothingFrames } = await import('../experiments/fixtures.js');
+  for (const rate of [48000, 44100]) {
+    for (const kind of ['dsp-binaural-front', 'dsp-binaural-right']) {
+      const { context, adapter } = makeAdapter(rate);
+      await adapter.dsp.load(context);
+      const node = adapter.dsp.createBinaural(context, { hrtf: syntheticHrtfTable(rate), smoothingFrames: binauralSmoothingFrames });
+      const program = binauralProgram(kind, rate);
+      for (const e of program.gain) node.gain.setValueAtTime(e.v, e.t);
+      for (const e of program.azimuth) node.azimuth.setValueAtTime(e.v, e.t);
+      for (const e of program.elevation) node.elevation.setValueAtTime(e.v, e.t);
+      const workletNode = context.nodes.filter(n => n.cb).at(-1);
+      const [L, R] = drive(workletNode, context, rate, 1);
+      const expected = binauralFixtureExpected(kind, rate);
+      const error = Math.max(maxError(L, expected[0]), maxError(R, expected[1]));
+      assert.ok(error <= 1e-5, `${kind} at ${rate}: ${error}`);
+      node.close();
+    }
+  }
+});
+
+test('native binaural node: close zeroes output and drops registry state', async () => {
+  const { syntheticHrtfTable, binauralSmoothingFrames } = await import('../experiments/fixtures.js');
+  const { context, adapter } = makeAdapter(48000);
+  await adapter.dsp.load(context);
+  const node = adapter.dsp.createBinaural(context, { hrtf: syntheticHrtfTable(48000), smoothingFrames: binauralSmoothingFrames });
+  node.gain.setValueAtTime(1, 0); node.azimuth.setValueAtTime(90, 0); node.elevation.setValueAtTime(0, 0);
+  const workletNode = context.nodes.filter(n => n.cb).at(-1);
+  const ins = [new Float32Array(BLOCK)], outs = [new Float32Array(BLOCK), new Float32Array(BLOCK)];
+  ins[0][0] = 1;
+  workletNode.cb(ins, outs, BLOCK, 0);
+  assert.ok(outs[1].some(v => v !== 0), 'right ear should carry azimuth-90 energy');
+  node.close();
+  for (let i = 0; i < 4; i++) { ins.fill(0); outs[0].fill(1); outs[1].fill(1); workletNode.cb(ins, outs, BLOCK, (i + 1) * BLOCK / 48000); }
+  assert.ok(outs[0].every(v => v === 0));
+  node.disconnect();
+});

@@ -1,7 +1,9 @@
-import type { HostContext, HostGain, HostPanner } from './backend.js';
+import type { HostBinauralNode, HostContext, HostGain, HostPanner } from './backend.js';
 import type { Engine } from './engine.js';
 import { TuneError, finite } from './errors.js';
 import { GraphNode, Param } from './graph.js';
+import { hrtfTableFor } from './hrtf.js';
+import type { HrtfAsset } from './hrtf.js';
 
 export type Vec3 = { x: number; y: number; z: number };
 export interface Pose { position: Vec3; forward: Vec3; up: Vec3 }
@@ -9,13 +11,15 @@ export interface DistanceModel { reference: number; max: number; rolloff: number
 export interface Cone { innerDegrees: number; outerDegrees: number; outerGain: number }
 export interface SpatialSourceOptions {
   rendering: 'stereo' | 'binaural';
+  /** Required for `rendering: 'binaural'` — an HrtfAsset from engine.loadHrtf. */
+  hrtf?: HrtfAsset;
   position?: Vec3;
   direction?: Vec3 | null;
   distance?: { reference?: number; max?: number; rolloff?: number };
   cone?: { innerDegrees?: number; outerDegrees?: number; outerGain?: number };
   smoothingSeconds?: number;
 }
-export interface StereoRenderResult { pan: number; gain: number; distance: number; azimuthDegrees: number }
+export interface StereoRenderResult { pan: number; gain: number; distance: number; azimuthDegrees: number; bearingDegrees: number; elevationDegrees: number }
 
 const frozen3 = (v: Vec3): Vec3 => Object.freeze({ x: v.x, y: v.y, z: v.z });
 const dot = (a: Vec3, b: Vec3): number => a.x * b.x + a.y * b.y + a.z * b.z;
@@ -42,12 +46,17 @@ export function stereoRender(listener: { position: Vec3; forward: Vec3; up: Vec3
   const distance = length(r);
   let pan = 0;
   let azimuthDegrees = 0;
+  let bearingDegrees = 0;
+  let elevationDegrees = 0;
   if (distance >= 1e-9) {
     const right = normalize(cross(listener.forward, listener.up));
     const x = dot(r, right);
     const z = dot(r, listener.forward);
+    elevationDegrees = Math.asin(clamp(dot(r, listener.up) / distance, -1, 1)) * 180 / Math.PI;
     if (x * x + z * z >= 1e-18) {
-      let azimuth = Math.atan2(x, z) * 180 / Math.PI;
+      const bearing = Math.atan2(x, z) * 180 / Math.PI;
+      bearingDegrees = ((bearing % 360) + 360) % 360;
+      let azimuth = bearing;
       if (azimuth > 90) azimuth = 180 - azimuth;
       else if (azimuth < -90) azimuth = -180 - azimuth;
       azimuthDegrees = azimuth;
@@ -69,7 +78,7 @@ export function stereoRender(listener: { position: Vec3; forward: Vec3; up: Vec3
     else coneGain = 1 - (a - ai) / (ao - ai) * (1 - source.cone.outerGain);
   }
   const gain = clamp(distanceGain * coneGain, 0, 1);
-  return { pan, gain: Number.isFinite(gain) ? gain : 0, distance, azimuthDegrees };
+  return { pan, gain: Number.isFinite(gain) ? gain : 0, distance, azimuthDegrees, bearingDegrees, elevationDegrees };
 }
 
 export class Listener {
@@ -102,6 +111,7 @@ export class Listener {
 
 export class SpatialSource extends GraphNode {
   readonly rendering: 'stereo' | 'binaural';
+  readonly hrtf?: HrtfAsset;
   #position: Vec3;
   #direction: Vec3 | null;
   readonly #distanceModel: DistanceModel;
@@ -109,14 +119,21 @@ export class SpatialSource extends GraphNode {
   readonly #smoothing: number;
   readonly #gain: Param;
   readonly #pan: Param;
+  readonly #azimuth: Param;
+  readonly #elevation: Param;
   /** @internal */ distanceGain?: HostGain;
   /** @internal */ panner?: HostPanner;
+  /** @internal */ binaural?: HostBinauralNode;
   /** @internal */ constructor(engine: Engine, options: SpatialSourceOptions) {
     super(engine, 'spatial');
     if (!options || typeof options !== 'object') throw new TuneError('INVALID_VALUE', 'spatialSource needs options.', 'Pass { rendering: "stereo" }.');
     if (options.rendering !== 'stereo' && options.rendering !== 'binaural') throw new TuneError('INVALID_VALUE', 'Unknown spatial rendering mode.', "Use 'stereo' or 'binaural'.");
-    if (options.rendering === 'binaural') throw new TuneError('UNSUPPORTED', 'Binaural rendering is not available yet on this host.', 'Use rendering: "stereo" for now.');
+    if (options.rendering === 'binaural') {
+      if (!engine.adapter.dsp) throw new TuneError('UNSUPPORTED', 'Binaural rendering needs the TuneJS DSP path on this host.', 'Use rendering: "stereo" or an adapter with a DSP path.');
+      if (!options.hrtf) throw new TuneError('INVALID_VALUE', 'Binaural rendering needs an HRTF asset.', 'Pass { hrtf } from engine.loadHrtf().');
+    }
     this.rendering = options.rendering;
+    this.hrtf = options.hrtf;
     this.#position = validateVec3(options.position ?? { x: 0, y: 0, z: -1 }, 'position')!;
     this.#direction = validateVec3(options.direction ?? null, 'direction', true);
     if (this.#direction && length(this.#direction) < 1e-9) throw new TuneError('INVALID_VALUE', 'direction must be nonzero or null.', 'Use null for an omnidirectional source.');
@@ -134,13 +151,16 @@ export class SpatialSource extends GraphNode {
     this.#smoothing = finite(options.smoothingSeconds ?? 0.02, 0, 10, 'smoothing seconds');
     this.#gain = new Param(this, 1, 'spatial gain', 0, 1);
     this.#pan = new Param(this, 0, 'spatial pan', -1, 1);
+    this.#azimuth = new Param(this, 0, 'spatial azimuth', 0, 360);
+    this.#elevation = new Param(this, 0, 'spatial elevation', -90, 90);
+    if (this.hrtf) engine.retainHrtf(this.hrtf, this);
   }
   get position(): Vec3 { return frozen3(this.#position); }
   get direction(): Vec3 | null { return this.#direction ? frozen3(this.#direction) : null; }
   get distanceModel(): DistanceModel { return Object.freeze({ ...this.#distanceModel }); }
   get cone(): Cone { return Object.freeze({ ...this.#cone }); }
   get smoothingSeconds(): number { return this.#smoothing; }
-  /** @internal */ override get input() { return this.distanceGain; }
+  /** @internal */ override get input() { return this.rendering === 'binaural' ? this.binaural : this.distanceGain; }
   setPosition(position: Vec3, options: { seconds?: number } = {}): void {
     this.assertAlive();
     this.#position = validateVec3(position, 'position')!;
@@ -159,9 +179,26 @@ export class SpatialSource extends GraphNode {
       { position: this.#position, direction: this.#direction, distanceModel: this.#distanceModel, cone: this.#cone },
     );
     this.#gain.rampTo(result.gain, { seconds });
-    this.#pan.rampTo(result.pan, { seconds });
+    if (this.rendering === 'binaural') {
+      // Azimuth/elevation are set-only: the kernel crossfades between HRIR positions itself.
+      this.#azimuth.set(result.bearingDegrees);
+      this.#elevation.set(result.elevationDegrees);
+    } else {
+      this.#pan.rampTo(result.pan, { seconds });
+    }
   }
   /** @internal */ override prepare(context: HostContext): void {
+    if (this.rendering === 'binaural') {
+      const node = this.engine.adapter.dsp!.createBinaural(context, {
+        hrtf: hrtfTableFor(this.hrtf!, context.sampleRate),
+        smoothingFrames: Math.max(1, Math.round(this.#smoothing * context.sampleRate)),
+      });
+      this.#gain.bind(node.gain);
+      this.#azimuth.bind(node.azimuth);
+      this.#elevation.bind(node.elevation);
+      this.binaural = node; this.host = node;
+      return;
+    }
     let distanceGain: HostGain | undefined; let panner: HostPanner | undefined;
     try {
       distanceGain = context.createGain();
@@ -181,12 +218,15 @@ export class SpatialSource extends GraphNode {
   }
   override dispose(): void {
     this.engine.spatial.delete(this);
+    if (this.hrtf) this.engine.releaseHrtf(this.hrtf, this);
     const errors: unknown[] = [];
     try { super.dispose(); } catch (error) { errors.push(error); }
-    this.#gain.bind(); this.#pan.bind();
+    this.#gain.bind(); this.#pan.bind(); this.#azimuth.bind(); this.#elevation.bind();
     try { this.distanceGain?.disconnect(); } catch (error) { errors.push(error); }
     try { this.panner?.disconnect(); } catch (error) { errors.push(error); }
-    this.distanceGain = undefined; this.panner = undefined;
+    try { this.binaural?.close(); } catch (error) { errors.push(error); }
+    try { this.binaural?.disconnect(); } catch (error) { errors.push(error); }
+    this.distanceGain = undefined; this.panner = undefined; this.binaural = undefined;
     if (errors.length) throw new TuneError('HOST_FAILURE', 'Host spatial source cleanup failed.', 'Dispose the engine to release remaining host resources.', { cause: new AggregateError(errors) });
   }
 }

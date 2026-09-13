@@ -4,22 +4,25 @@
 // emitter motion at 60 control updates per second; meter reads at 30 Hz; a 100 ms busy period on the JS thread
 // once per second. It reports engine-side accounting only — late/skipped transport events, tap drops, errors,
 // voice counts and engine-clock progress. Hosts expose no underrun counter, so "no dropouts" is NOT concluded
-// from this alone; listening or loopback capture is a separate step. Binaural mode is not available yet, so only
-// the stereo variant runs.
+// from this alone; listening or loopback capture is a separate step. `rendering: 'binaural'` routes the emitters
+// through tunejs-binaural-v1 with the shipped SADIE II asset.
 import { Engine } from 'tunejs';
 import { softKeys } from 'tunejs/presets';
 import { wavBytes } from './workload-wav.js';
 
 export const workloadVersion = 1;
 
-export async function runWorkload(adapter, { seconds = 600, busyMs = 100, poseHz = 60, meterHz = 30, sampleEvery = 10, now = () => performance.now(), onSample } = {}) {
+export async function runWorkload(adapter, { seconds = 600, busyMs = 100, poseHz = 60, meterHz = 30, sampleEvery = 10, rendering = 'stereo', hrtfUrl = '/assets/hrtf/sadie2-d1-ku100-v1.tjhrtf', now = () => performance.now(), onSample } = {}) {
   const engine = new Engine({ adapter });
   await engine.start();
   const rate = engine.sampleRate;
+  // Binaural mode routes the same four sample loops through tunejs-binaural-v1 emitters; the HRTF
+  // asset is fetched by URL (the dev/evidence server serves the repo root).
+  const hrtf = rendering === 'binaural' ? await engine.loadHrtf({ url: hrtfUrl }) : undefined;
   const emitters = [];
   for (let i = 0; i < 4; i++) {
     const sample = await engine.sample({ id: `loop-${i}`, bytes: wavBytes(rate, 1, 110 * (i + 2), 0.2) });
-    const emitter = await engine.spatialSource({ rendering: 'stereo', position: { x: Math.cos(i * Math.PI / 2) * 3, y: 0, z: Math.sin(i * Math.PI / 2) * 3 } });
+    const emitter = await engine.spatialSource({ rendering, hrtf, position: { x: Math.cos(i * Math.PI / 2) * 3, y: 0, z: Math.sin(i * Math.PI / 2) * 3 } });
     sample.connect(emitter).connect(engine.output);
     emitters.push({ sample, emitter, voice: sample.play({ loop: true }), phase: i * Math.PI / 2 });
   }
@@ -78,6 +81,7 @@ export async function runWorkload(adapter, { seconds = 600, busyMs = 100, poseHz
     totals: { lateEvents: last.transport.lateEvents, maxLatenessSeconds: last.transport.maxLatenessSeconds, skippedEvents: last.transport.skippedEvents, scheduledEvents: last.transport.scheduledEvents, interruptions: last.transport.interruptions, errors: last.transport.errors, meterReads, meterDroppedFrames: last.meter.droppedFrames, poseUpdates, busyPeriods, maxBusyMs, peakVoices, finalVoicesBeforeDispose, clockDriftSeconds: clockDrift, disposedNodes: engine.diagnostics.nodes, disposedVoices: engine.diagnostics.voices },
     samples,
     status: pass ? 'pass' : 'fail',
-    scope: 'engine-side accounting under the reference workload (stereo mode only; binaural unavailable); no underrun counter exists on these hosts, so audible dropout freedom is not concluded here',
+    rendering,
+    scope: `engine-side accounting under the reference workload (${rendering} mode); no underrun counter exists on these hosts, so audible dropout freedom is not concluded here`,
   };
 }

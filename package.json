@@ -3,14 +3,33 @@
   "version": "0.0.1-dev.0",
   "private": true,
   "type": "module",
-  "description": "Experimental composable sound framework — first-sound development snapshot",
-  "files": ["dist", "README.md"],
+  "description": "Experimental composable sound framework \u2014 first-sound development snapshot",
+  "files": [
+    "dist",
+    "assets/hrtf",
+    "README.md"
+  ],
   "exports": {
-    ".": {"types": "./dist/index.d.ts", "default": "./dist/index.js"},
-    "./browser": {"types": "./dist/adapters/browser.d.ts", "default": "./dist/adapters/browser.js"},
-    "./native": {"types": "./dist/adapters/native.d.ts", "default": "./dist/adapters/native.js"},
-    "./presets": {"types": "./dist/presets.d.ts", "default": "./dist/presets.js"},
-    "./three": {"types": "./dist/three.d.ts", "default": "./dist/three.js"}
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/adapters/browser.d.ts",
+      "default": "./dist/adapters/browser.js"
+    },
+    "./native": {
+      "types": "./dist/adapters/native.d.ts",
+      "default": "./dist/adapters/native.js"
+    },
+    "./presets": {
+      "types": "./dist/presets.d.ts",
+      "default": "./dist/presets.js"
+    },
+    "./three": {
+      "types": "./dist/three.d.ts",
+      "default": "./dist/three.js"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/bundle-worklet.mjs --check",
@@ -21,8 +40,14 @@
     "experiment:cpp": "node scripts/cpp-experiment.mjs",
     "check:package": "node scripts/check-package.mjs",
     "prepare:native": "node scripts/prepare-native.mjs",
-    "check:native": "node scripts/prepare-native.mjs --check"
+    "check:native": "node scripts/prepare-native.mjs --check",
+    "prepare:hrtf": "node scripts/prepare-hrtf.mjs",
+    "check:hrtf": "node scripts/prepare-hrtf.mjs --check"
   },
-  "devDependencies": {"typescript": "6.0.3"},
-  "engines": {"node": ">=22"}
+  "devDependencies": {
+    "typescript": "6.0.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
 }

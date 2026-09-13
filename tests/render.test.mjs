@@ -155,3 +155,40 @@ test('kits, noise layers, pitch envelopes and layer filters render deterministic
   assert.ok(a.channels[0].every(Number.isFinite)); assert.ok(maxAbs(a.channels[0],0,24000)>0.05); assert.ok(maxAbs(a.channels[0],24000,48000)>0.01,'the snare noise burst is present');
   assert.ok(maxAbs(a.channels[0],a.frames-1000)<1e-6);
 });
+
+test('render: a binaural spatial emitter matches the kernel and is deterministic',async()=>{
+  const {encodeHrtfAsset,hrtfTableFor,decodeHrtfAsset}=await import('../dist/hrtf.js');
+  const {BinauralEffect,BLOCK}=await import('../dist/dsp.js');
+  const {syntheticHrtfTable,binauralSmoothingFrames}=await import('../experiments/fixtures.js');
+  const rate=48000;
+  const table=syntheticHrtfTable(rate);
+  const hrtfBytes=encodeHrtfAsset({format:'tunejs-hrtf',version:1,id:'fixture-hrtf',azimuthConvention:'clockwise-from-front-degrees',elevations:table.elevations,azimuthStepDegrees:table.azimuthStepDegrees,poles:'single',taps:table.taps,sampleFormat:'int16',rates:[rate],positions:table.rows.reduce((n,r)=>n+r.length/(2*table.taps),0),layout:'test',peak:1,source:{},conversion:'test'},new Map([[rate,table]]));
+  // Build the project via the public API on a dsp-capable host double.
+  const e=host(); e.adapter.dsp={}; // render never touches the host; binaural needs a dsp path
+  const hrtf=await e.loadHrtf({bytes:hrtfBytes});
+  const sample=await e.sample({id:'impulse',bytes:impulseBytes});
+  const emitter=await e.spatialSource({rendering:'binaural',hrtf,position:{x:1,y:0,z:0},smoothingSeconds:binauralSmoothingFrames/rate});
+  sample.connect(emitter).connect(e.output);
+  e.transport.schedule(e.pattern({length:{beats:4},events:[{beat:0,notes:'sample',duration:{beats:4}}]}),sample,{at:{beats:0},loop:false});
+  const {project}=e.exportProject();
+  const spatialDef=project.nodes.find(n=>n.type==='spatial');
+  assert.equal(spatialDef.renderer,'tunejs-binaural-v1');
+  await e.dispose();
+  const resolveAll=async id=>id==='impulse'?impulseBytes:hrtfBytes;
+  const result=await Engine.render(project,{range:{fromBeat:0,toBeat:4},tail:{seconds:0.5},sampleRate:rate,resolveAsset:resolveAll});
+  // Reference: the same emitter through BinauralEffect fed the impulse (gain 1, bearing 90, elevation 0).
+  const effect=new BinauralEffect(hrtfTableFor(decodeHrtfAsset(hrtfBytes),rate),binauralSmoothingFrames);
+  const N=result.frames;const expected=[new Float64Array(N),new Float64Array(N)];
+  const one={valueAt:()=>1},ninety={valueAt:()=>90},zero={valueAt:()=>0};
+  for(let f0=0;f0<N;f0+=BLOCK){
+    const frames=Math.min(BLOCK,N-f0);const ins=[new Float64Array(BLOCK)];ins[0][0]=f0===0?1:0;
+    const outs=[new Float64Array(BLOCK),new Float64Array(BLOCK)];
+    effect.process(ins,outs,one,ninety,zero,f0/rate,rate,frames);
+    for(let i=0;i<frames;i++){expected[0][f0+i]=outs[0][i];expected[1][f0+i]=outs[1][i];}
+  }
+  for(let c=0;c<2;c++){let err=0;for(let i=0;i<N;i++)err=Math.max(err,Math.abs(result.channels[c][i]-Math.fround(expected[c][i])));assert.ok(err<=1e-9,`channel ${c} error ${err}`);}
+  const again=await Engine.render(project,{range:{fromBeat:0,toBeat:4},tail:{seconds:0.5},sampleRate:rate,resolveAsset:resolveAll});
+  assert.deepEqual([...again.channels[0]],[...result.channels[0]]);assert.deepEqual([...again.channels[1]],[...result.channels[1]]);
+  // rate not in the asset → UNSUPPORTED
+  await assert.rejects(Engine.render(project,{range:{fromBeat:0,toBeat:4},tail:{seconds:0.5},sampleRate:44100,resolveAsset:resolveAll}),code('UNSUPPORTED'));
+});

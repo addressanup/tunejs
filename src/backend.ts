@@ -71,8 +71,23 @@ export interface HostDspNode extends HostNode { readonly mix: HostParam; close()
  * not resolved for that context. Both processors use the same kernel as the offline renderer
  * (src/dsp.ts) so live and offline output agree sample-for-sample up to float rounding.
  */
+/**
+ * Decoded HRTF table handed to the binaural processor (see docs/hrtf-asset.md). Azimuth is degrees
+ * clockwise from the front (90 = right); `rows[r]` holds every position of elevation row r as
+ * `positions × 2 × taps` float32 (left ear then right ear per position), azimuths ascending from 0 in
+ * `azimuthStepDegrees` steps; a pole row (|elevation| = 90) holds one position.
+ */
+export interface HrtfTable { id: string; sampleRate: number; taps: number; elevations: number[]; azimuthStepDegrees: number; rows: Float32Array[] }
+/**
+ * tunejs-binaural-v1 processor: mono in (stereo input is averaged), `gain` a-rate on the input,
+ * `azimuth`/`elevation` read at each block start and mapped to the nearest table position; an HRIR
+ * change crossfades linearly over `smoothingFrames` (weights (i+1)/N), during which further
+ * changes wait; then stereo out. Same kernel offline and live.
+ */
+export interface HostBinauralNode extends HostNode { readonly gain: HostParam; readonly azimuth: HostParam; readonly elevation: HostParam; close(): void }
 export interface HostDsp {
   load(context: HostContext): Promise<void>;
+  createBinaural(context: HostContext, spec: { hrtf: HrtfTable; smoothingFrames: number }): HostBinauralNode;
   /** Feedforward echo: wet = Σ_{k=1..taps} feedback^k · x[n − k·delayFrames]; output is stereo, mono input feeds both channels. */
   createDelay(context: HostContext, spec: { delayFrames: number; taps: number; feedback: number }): HostDspNode;
   /** Convolution with `response` (1 or 2 channels at the context rate); mono input feeds both ears; output is stereo. */

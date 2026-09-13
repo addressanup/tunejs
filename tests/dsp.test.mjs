@@ -124,11 +124,12 @@ test('mix ramp is applied per sample to the wet path',()=>{
 function simulateWorklet(processorOptions,rate){
   const scope={};
   scope.AudioWorkletProcessor=class{constructor(options){this.options=options;this.port={postMessage(){},onmessage:null};}};
-  scope.registerProcessor=(name,ctor)=>{scope.__ctor=ctor;scope.__name=name;};
+  scope.registerProcessor=(name,ctor)=>{(scope.__ctors??={})[name]=ctor;scope.__ctor=ctor;scope.__name=name;};
   scope.currentTime=0;scope.sampleRate=rate;
   new Function('scope',`with(scope){${DSP_PROCESSOR_SOURCE}}`)(scope);
-  assert.equal(scope.__name,'tunejs-dsp');
-  return {proc:new scope.__ctor({processorOptions}),scope,mixValues:new Float32Array(BLOCK).fill(1)};
+  assert.ok(scope.__ctors['tunejs-dsp']&&scope.__ctors['tunejs-binaural'],'both processors registered');
+  const Ctor=scope.__ctors[processorOptions.name==='binaural'?'tunejs-binaural':'tunejs-dsp'];
+  return {proc:new Ctor({processorOptions}),scope,mixValues:new Float32Array(BLOCK).fill(1)};
 }
 function runProcessor(sim,rate,seconds=1){
   const frames=rate*seconds;
@@ -180,3 +181,32 @@ test('Timeline events/load round-trip preserves automation', () => {
     assert.equal(b.valueAt(t), a.valueAt(t), `mismatch at ${t}`);
   }
 });
+
+// The bundled 'tunejs-binaural' processor, driven like an AudioWorklet: gain a-rate array,
+// azimuth/elevation k-rate scalars, Float32 in/out. Compare against the fixture reference.
+for (const rate of [48000, 44100]) {
+  for (const kind of ['dsp-binaural-front', 'dsp-binaural-right']) {
+    test(`bundled tunejs-binaural processor matches the reference (${kind} at ${rate})`, async () => {
+      const { syntheticHrtfTable, binauralProgram, binauralFixtureExpected, binauralSmoothingFrames, automation } = await import('../experiments/fixtures.js');
+      const program = binauralProgram(kind, rate);
+      const sim = simulateWorklet({ name: 'binaural', hrtf: syntheticHrtfTable(rate), smoothingFrames: binauralSmoothingFrames }, rate);
+      const gainAt = automation(program.gain), azAt = automation(program.azimuth), elAt = automation(program.elevation);
+      const out = [new Float32Array(rate), new Float32Array(rate)];
+      for (let b = 0; b < Math.ceil(rate / BLOCK); b++) {
+        const t0 = b * BLOCK / rate;
+        sim.scope.currentTime = t0;
+        const ins = [[new Float32Array(BLOCK)]];
+        for (let i = 0; i < BLOCK; i++) ins[0][0][i] = program.input[b * BLOCK + i] ?? 0;
+        const outs = [[new Float32Array(BLOCK), new Float32Array(BLOCK)]];
+        const gain = new Float32Array(BLOCK);
+        for (let i = 0; i < BLOCK; i++) gain[i] = gainAt(t0 + i / rate);
+        const parameters = { gain, azimuth: [azAt(t0)], elevation: [elAt(t0)] };
+        sim.proc.process(ins, outs, parameters);
+        const n = Math.min(BLOCK, rate - b * BLOCK);
+        out[0].set(outs[0][0].subarray(0, n), b * BLOCK); out[1].set(outs[0][1].subarray(0, n), b * BLOCK);
+      }
+      const expected = binauralFixtureExpected(kind, rate);
+      for (let c = 0; c < 2; c++) for (let i = 0; i < rate; i++) close(out[c][i], expected[c][i], 1e-5);
+    });
+  }
+}

@@ -181,50 +181,107 @@ export class DelayEffect {
  * eight 128-frame sub-blocks and the IFFT runs at the boundary.
  * process() writes the wet signal only.
  */
+/**
+ * Input-side state of a partitioned convolver — the frequency-domain delay lines and the tail
+ * staging buffer. Convolvers fed the identical signal can share one ConvolverInput: the owner
+ * calls `ingest()` once per block, each slot `render()`s, then the owner calls `endBlock()`;
+ * spare (crossfade) slots stay warm for free and only render while a crossfade is active.
+ * Sized for a given kernel length.
+ */
+export class ConvolverInput {
+  static readonly HEAD_PARTITIONS = 16;
+  static readonly TAIL_PARTITION = 1024;
+  readonly headX: { re: Float64Array; im: Float64Array }[] = [];
+  readonly tailX: { re: Float64Array; im: Float64Array }[] = [];
+  readonly tailIn = new Float64Array(ConvolverInput.TAIL_PARTITION);
+  readonly headParts: number;
+  readonly tailParts: number;
+  blockIndex = 0;
+  constructor(taps: number) {
+    this.headParts = Math.min(ConvolverInput.HEAD_PARTITIONS, Math.ceil(taps / BLOCK));
+    this.tailParts = Math.max(0, Math.ceil((taps - ConvolverInput.HEAD_PARTITIONS * BLOCK) / ConvolverInput.TAIL_PARTITION));
+  }
+  /** Push one 128-frame block — call once per block before any slot renders. */
+  ingest(input: Float64Array): void {
+    const block = this.blockIndex++;
+    const re = new Float64Array(256); const im = new Float64Array(256);
+    re.set(input); fft(re, im);
+    this.headX.unshift({ re, im });
+    if (this.headX.length > this.headParts) this.headX.pop();
+    this.tailIn.set(input, (block % 8) * BLOCK);
+  }
+  /** Tail-boundary bookkeeping after all slots rendered this block — pushes the completed
+   *  1024-frame input transform into the tail delay line so renders always consume the
+   *  pre-push list, exactly as the fused process() did. */
+  endBlock(): void {
+    const block = this.blockIndex - 1;
+    if (block % 8 === 7 && this.tailParts > 0) {
+      const xre = new Float64Array(2048); const xim = new Float64Array(2048);
+      xre.set(this.tailIn); fft(xre, xim);
+      this.tailX.unshift({ re: xre, im: xim });
+      if (this.tailX.length > this.tailParts + 2) this.tailX.pop();
+    }
+  }
+}
+
 export class PartitionedConvolver {
-  static readonly #HEAD_PARTITIONS = 16;
-  static readonly #TAIL_PARTITION = 1024;
   readonly #headH: { re: Float64Array; im: Float64Array }[] = [];
   readonly #tailH: { re: Float64Array; im: Float64Array }[] = [];
-  readonly #headX: { re: Float64Array; im: Float64Array }[] = [];
-  readonly #tailX: { re: Float64Array; im: Float64Array }[] = [];
+  readonly #input: ConvolverInput;
+  readonly #shared: boolean;
   readonly #headAccRe = new Float64Array(256);
   readonly #headAccIm = new Float64Array(256);
   readonly #headOla = new Float64Array(BLOCK);
   readonly #tailAccRe = new Float64Array(2048);
   readonly #tailAccIm = new Float64Array(2048);
-  readonly #tailIn = new Float64Array(PartitionedConvolver.#TAIL_PARTITION);
-  readonly #tailOla = new Float64Array(PartitionedConvolver.#TAIL_PARTITION);
-  readonly #tailOut = new Float64Array(PartitionedConvolver.#TAIL_PARTITION);
-  #blockIndex = 0;
-  constructor(kernel: ArrayLike<number>) {
-    const heads = Math.min(PartitionedConvolver.#HEAD_PARTITIONS, Math.ceil(kernel.length / BLOCK));
+  readonly #tailOla = new Float64Array(ConvolverInput.TAIL_PARTITION);
+  readonly #tailOut = new Float64Array(ConvolverInput.TAIL_PARTITION);
+  #taps = 0;
+  constructor(kernel: ArrayLike<number>, input?: ConvolverInput) {
+    this.#input = input ?? new ConvolverInput(kernel.length);
+    this.#shared = input !== undefined;
+    this.#setSpectra(kernel);
+    if (this.#shared && (this.#headH.length !== this.#input.headParts || this.#tailH.length !== this.#input.tailParts)) {
+      throw new Error('shared convolver input was built for a different kernel length');
+    }
+  }
+  /** Does this kernel carry tail partitions (> 2048 taps)? Shared-input spare slots must keep
+   *  rendering while idle — their tailOut/acc/ola pipelines would otherwise go stale. */
+  get hasTail(): boolean { return this.#tailH.length > 0; }
+  /**
+   * Swap the kernel without touching the input history — the frequency-domain delay lines hold
+   * input spectra, so a new kernel applies them to the whole signal seen so far (exact FIR).
+   * Kernel length is fixed: the shared input history is sized for it.
+   */
+  setKernel(kernel: ArrayLike<number>): void {
+    if (kernel.length !== this.#taps) throw new Error('kernel length cannot change; the input history is sized for the original length');
+    this.#setSpectra(kernel);
+  }
+  #setSpectra(kernel: ArrayLike<number>): void {
+    this.#taps = kernel.length;
+    this.#headH.length = 0; this.#tailH.length = 0;
+    const heads = Math.min(ConvolverInput.HEAD_PARTITIONS, Math.ceil(kernel.length / BLOCK));
     for (let j = 0; j < heads; j++) {
       const re = new Float64Array(256); const im = new Float64Array(256);
       for (let i = 0; i < BLOCK; i++) re[i] = j * BLOCK + i < kernel.length ? kernel[j * BLOCK + i]! : 0;
       fft(re, im); this.#headH.push({ re, im });
     }
-    const tailLength = kernel.length - PartitionedConvolver.#HEAD_PARTITIONS * BLOCK;
-    const tails = Math.max(0, Math.ceil(tailLength / PartitionedConvolver.#TAIL_PARTITION));
+    const tailLength = kernel.length - ConvolverInput.HEAD_PARTITIONS * BLOCK;
+    const tails = Math.max(0, Math.ceil(tailLength / ConvolverInput.TAIL_PARTITION));
     for (let j = 0; j < tails; j++) {
       const re = new Float64Array(2048); const im = new Float64Array(2048);
-      const offset = PartitionedConvolver.#HEAD_PARTITIONS * BLOCK + j * PartitionedConvolver.#TAIL_PARTITION;
-      for (let i = 0; i < PartitionedConvolver.#TAIL_PARTITION; i++) re[i] = offset + i < kernel.length ? kernel[offset + i]! : 0;
+      const offset = ConvolverInput.HEAD_PARTITIONS * BLOCK + j * ConvolverInput.TAIL_PARTITION;
+      for (let i = 0; i < ConvolverInput.TAIL_PARTITION; i++) re[i] = offset + i < kernel.length ? kernel[offset + i]! : 0;
       fft(re, im); this.#tailH.push({ re, im });
     }
   }
-  /** `input`/`output` are one 128-frame block each; output gains the wet signal. */
-  process(input: Float64Array, output: Float64Array): void {
-    const block = this.#blockIndex++;
-    // Head partitions: spectrum of the current block, then Σ_j X_{b−j}·H_j.
-    const re = this.#headAccRe; const im = this.#headAccIm;
-    re.fill(0); re.set(input); im.fill(0);
-    fft(re, im);
-    this.#headX.unshift({ re: re.slice(), im: im.slice() });
-    if (this.#headX.length > this.#headH.length) this.#headX.pop();
-    const outRe = re.fill(0); const outIm = im.fill(0);
-    for (let j = 0; j < this.#headX.length; j++) {
-      const x = this.#headX[j]!; const h = this.#headH[j]!;
+  /** Render the wet block from the current input history — call after `input.ingest`. */
+  render(output: Float64Array): void {
+    const block = this.#input.blockIndex - 1;
+    const outRe = this.#headAccRe.fill(0); const outIm = this.#headAccIm.fill(0);
+    const headX = this.#input.headX;
+    for (let j = 0; j < headX.length; j++) {
+      const x = headX[j]!; const h = this.#headH[j]!;
       for (let i = 0; i < 256; i++) {
         outRe[i] = outRe[i]! + x.re[i]! * h.re[i]! - x.im[i]! * h.im[i]!;
         outIm[i] = outIm[i]! + x.re[i]! * h.im[i]! + x.im[i]! * h.re[i]!;
@@ -238,34 +295,34 @@ export class PartitionedConvolver {
     // previous tail boundary); emit this sub-block's slice.
     const off = sub * BLOCK;
     for (let i = 0; i < BLOCK; i++) output[i] = output[i]! + this.#tailOut[off + i]!;
-    this.#tailIn.set(input, off);
     // Spread the next output block's partition MACs over these eight sub-blocks: output block
-    // m = floor(block/8) + 1 needs X_{m−2−j}·H_j, and #tailX[j] is exactly X_{m−2−j} here
-    // (the newest entry X_{m−2} was pushed at the end of input block m−2).
+    // m = floor(block/8) + 1 needs X_{m−2−j}·H_j, and tailX[j] is exactly X_{m−2−j} here
+    // (the newest entry X_{m−2} is pushed by endBlock() after the renders of block m−2).
     const per = Math.ceil(this.#tailH.length / 8);
-    for (let j = sub * per; j < Math.min((sub + 1) * per, this.#tailH.length, this.#tailX.length); j++) {
-      const x = this.#tailX[j]!; const h = this.#tailH[j]!;
+    for (let j = sub * per; j < Math.min((sub + 1) * per, this.#tailH.length, this.#input.tailX.length); j++) {
+      const x = this.#input.tailX[j]!; const h = this.#tailH[j]!;
       for (let i = 0; i < 2048; i++) {
         this.#tailAccRe[i] = this.#tailAccRe[i]! + x.re[i]! * h.re[i]! - x.im[i]! * h.im[i]!;
         this.#tailAccIm[i] = this.#tailAccIm[i]! + x.re[i]! * h.im[i]! + x.im[i]! * h.re[i]!;
       }
     }
     if (sub === 7) {
-      // The 1024-frame input block completes: FFT it into the tail FDL after this output
-      // block's MACs consumed the list.
-      const xre = new Float64Array(2048); const xim = new Float64Array(2048);
-      xre.set(this.#tailIn); fft(xre, xim);
-      this.#tailX.unshift({ re: xre, im: xim });
-      if (this.#tailX.length > this.#tailH.length + 2) this.#tailX.pop();
       // IFFT the accumulated spectrum → next output block, overlap-added with the pending
       // second half of the previous tail transform.
       fft(this.#tailAccRe, this.#tailAccIm, true);
-      for (let i = 0; i < PartitionedConvolver.#TAIL_PARTITION; i++) {
+      for (let i = 0; i < ConvolverInput.TAIL_PARTITION; i++) {
         this.#tailOut[i] = this.#tailAccRe[i]! + this.#tailOla[i]!;
-        this.#tailOla[i] = this.#tailAccRe[PartitionedConvolver.#TAIL_PARTITION + i]!;
+        this.#tailOla[i] = this.#tailAccRe[ConvolverInput.TAIL_PARTITION + i]!;
       }
       this.#tailAccRe.fill(0); this.#tailAccIm.fill(0);
     }
+  }
+  /** `input`/`output` are one 128-frame block each; output gains the wet signal. */
+  process(input: Float64Array, output: Float64Array): void {
+    if (this.#shared) throw new Error('shared convolvers render() — the owner ingests once per block');
+    this.#input.ingest(input);
+    this.render(output);
+    this.#input.endBlock();
   }
 }
 
@@ -297,6 +354,114 @@ export class ConvolverEffect {
         const y = src[i]! + wet[i]! * mix.valueAt(t0 + i / sampleRate);
         dst[i] = Math.abs(y) < 1e-12 ? 0 : y;
       }
+    }
+  }
+}
+
+/**
+ * Position lookup for tunejs-binaural-v1: nearest elevation row (ties resolve to the lower
+ * index), then round(azimuth / step) mod (360 / step); a pole row has one position.
+ */
+export function nearestHrtfPosition(table: { elevations: number[]; azimuthStepDegrees: number; taps: number; rows: { length: number }[] }, azimuthDegrees: number, elevationDegrees: number): { row: number; index: number } {
+  let row = 0;
+  for (let r = 1; r < table.elevations.length; r++) {
+    if (Math.abs(elevationDegrees - table.elevations[r]!) < Math.abs(elevationDegrees - table.elevations[row]!)) row = r;
+  }
+  const count = table.rows[row]!.length / (2 * table.taps);
+  if (count === 1) return { row, index: 0 };
+  const az = ((azimuthDegrees % 360) + 360) % 360;
+  return { row, index: Math.round(az / table.azimuthStepDegrees) % count };
+}
+
+interface BinauralTable { taps: number; elevations: number[]; azimuthStepDegrees: number; rows: Float32Array[] }
+
+/**
+ * tunejs-binaural-v1 kernel (docs/hrtf-asset.md): mono input (stereo averaged) scaled by the
+ * a-rate `gain`, convolved with the HRIR pair nearest the block-start azimuth/elevation. A
+ * position change crossfades old→new over `smoothingFrames` frames (w = (i+1)/N); while a
+ * crossfade runs, new positions wait for the block after it ends. Both convolver slots process
+ * every block so either can take over with full history (the FDL is kernel-independent).
+ * Output is stereo wet-only; sub-1e-12 magnitudes flush to exact zero.
+ */
+export class BinauralEffect {
+  readonly #smoothingFrames: number;
+  readonly #input: ConvolverInput;
+  readonly #slots: { left: PartitionedConvolver; right: PartitionedConvolver }[];
+  readonly #wet: [Float64Array, Float64Array][];
+  readonly #x = new Float64Array(BLOCK);
+  readonly #alwaysRenderSpare: boolean;
+  #current = 0;
+  #pos?: { row: number; index: number };
+  #fade = -1;
+  constructor(table: { taps: number; elevations: number[]; azimuthStepDegrees: number; rows: Float32Array[] }, smoothingFrames: number) {
+    this.#table = table;
+    this.#smoothingFrames = Math.max(1, Math.round(smoothingFrames));
+    this.#input = new ConvolverInput(table.taps);
+    const zero = new Float64Array(table.taps);
+    // Both slots share the one input history — the spare is warm by construction and only
+    // renders while a crossfade runs (or always, when kernels carry >2048-tap tails whose
+    // per-slot tail pipeline must advance every block).
+    this.#slots = [
+      { left: new PartitionedConvolver(zero, this.#input), right: new PartitionedConvolver(zero, this.#input) },
+      { left: new PartitionedConvolver(zero, this.#input), right: new PartitionedConvolver(zero, this.#input) },
+    ];
+    this.#alwaysRenderSpare = table.taps > ConvolverInput.HEAD_PARTITIONS * BLOCK;
+    this.#wet = [[new Float64Array(BLOCK), new Float64Array(BLOCK)], [new Float64Array(BLOCK), new Float64Array(BLOCK)]];
+  }
+  #table: { taps: number; elevations: number[]; azimuthStepDegrees: number; rows: Float32Array[] };
+  #kernels(pos: { row: number; index: number }): { left: Float32Array; right: Float32Array } {
+    const taps = this.#table.taps;
+    const row = this.#table.rows[pos.row]!;
+    return { left: row.subarray(pos.index * 2 * taps, pos.index * 2 * taps + taps) as Float32Array, right: row.subarray(pos.index * 2 * taps + taps, pos.index * 2 * taps + 2 * taps) as Float32Array };
+  }
+  process(inputs: Float64Array[], outputs: Float64Array[], gain: MixSource, azimuth: MixSource, elevation: MixSource, t0: number, sampleRate: number, frames = BLOCK): void {
+    const x = this.#x;
+    const in0 = inputs[0]; const in1 = inputs[1];
+    for (let i = 0; i < frames; i++) {
+      const a = in0 ? in0[i]! : 0;
+      const b = in1 ? in1[i]! : a;
+      x[i] = (a + b) / 2 * gain.valueAt(t0 + i / sampleRate);
+    }
+    x.fill(0, frames);
+    if (this.#fade < 0) {
+      const target = nearestHrtfPosition(this.#table, azimuth.valueAt(t0), elevation.valueAt(t0));
+      if (!this.#pos) {
+        this.#pos = target;
+        const k = this.#kernels(target);
+        this.#slots[this.#current]!.left.setKernel(k.left);
+        this.#slots[this.#current]!.right.setKernel(k.right);
+      } else if (target.row !== this.#pos.row || target.index !== this.#pos.index) {
+        const spare = 1 - this.#current;
+        const k = this.#kernels(target);
+        this.#slots[spare]!.left.setKernel(k.left);
+        this.#slots[spare]!.right.setKernel(k.right);
+        this.#current = spare;
+        this.#pos = target;
+        this.#fade = 0;
+      }
+    }
+    this.#input.ingest(x);
+    const cur = this.#current; const old = 1 - cur;
+    const renderSpare = this.#fade >= 0 || this.#alwaysRenderSpare;
+    this.#slots[cur]!.left.render(this.#wet[cur]![0]!);
+    this.#slots[cur]!.right.render(this.#wet[cur]![1]!);
+    if (renderSpare) {
+      this.#slots[old]!.left.render(this.#wet[old]![0]!);
+      this.#slots[old]!.right.render(this.#wet[old]![1]!);
+    }
+    this.#input.endBlock();
+    for (let i = 0; i < frames; i++) {
+      let left: number; let right: number;
+      if (this.#fade < 0) {
+        left = this.#wet[cur]![0]![i]!; right = this.#wet[cur]![1]![i]!;
+      } else {
+        const w = (this.#fade + 1) / this.#smoothingFrames;
+        left = (1 - w) * this.#wet[old]![0]![i]! + w * this.#wet[cur]![0]![i]!;
+        right = (1 - w) * this.#wet[old]![1]![i]! + w * this.#wet[cur]![1]![i]!;
+        if (++this.#fade >= this.#smoothingFrames) this.#fade = -1;
+      }
+      outputs[0]![i] = Math.abs(left) < 1e-12 ? 0 : left;
+      outputs[1]![i] = Math.abs(right) < 1e-12 ? 0 : right;
     }
   }
 }

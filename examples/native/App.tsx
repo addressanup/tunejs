@@ -17,6 +17,31 @@ export default function App() {
   const [scene] = useState(() => spatialPlayground(adapter));
   const [status, setStatus] = useState('Idle — tap Play to activate audio');
   const yaw = useRef(0);
+  const [binaural, setBinaural] = useState(false);
+  const hrtf = useRef<unknown>(null);
+  const startScene = async () => {
+    if (binaural) {
+      if (!hrtf.current) {
+        // The example fetches the asset from the fixture server; a production app would bundle
+        // sadie2-d1-ku100-v1.tjhrtf as a Metro asset and pass its bytes to engine.loadHrtf.
+        const endpoints = Platform.OS === 'android' ? ['http://10.0.2.2:4173', 'http://127.0.0.1:4173'] : ['http://127.0.0.1:4173'];
+        let lastError: unknown;
+        for (const endpoint of endpoints) {
+          try {
+            const response = await fetch(`${endpoint}/assets/hrtf/sadie2-d1-ku100-v1.tjhrtf`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            hrtf.current = await scene.engine.loadHrtf({ bytes: await response.arrayBuffer() });
+            break;
+          } catch (error) { lastError = error; }
+        }
+        if (!hrtf.current) throw lastError;
+      }
+      await scene.setRendering('binaural', hrtf.current);
+    } else {
+      await scene.setRendering('stereo');
+    }
+    await scene.start();
+  };
   const [results, setResults] = useState('Offline fixtures running');
   const act = async (action: () => unknown) => { try { await action(); setStatus(JSON.stringify(sound.engine.diagnostics)); } catch(error) { setStatus(String(error)); } };
   useEffect(() => {
@@ -74,7 +99,8 @@ export default function App() {
     <Button title="Replace phrase" onPress={() => void act(() => loop.replacePhrase())} />
     <Button title="Tempo 124" onPress={() => void act(() => loop.setTempo(124))} />
     <Text style={{fontSize:18,fontWeight:'600'}}>Spatial playground</Text>
-    <Button title="Start scene" onPress={() => void act(scene.start)} />
+    <Button title={`Binaural: ${binaural ? 'on' : 'off'}`} onPress={() => setBinaural(b => !b)} />
+    <Button title="Start scene" onPress={() => void act(startScene)} />
     <Button title="Stop scene" onPress={() => void act(scene.stop)} />
     <Button title="Rotate listener" onPress={() => void act(() => { yaw.current += 0.5; scene.rotateListener(yaw.current); })} />
     <Text selectable>{status}</Text>

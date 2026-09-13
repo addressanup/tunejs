@@ -120,7 +120,7 @@ test('fixture reports retain strict timing failures alongside onset diagnostics'
     };
   };
   const report=await fixtures.runFixtures(createOffline);
-  assert.equal(report.fixtureVersion,7);
+  assert.equal(report.fixtureVersion,8);
   assert.equal(report.scheduling,'raw-seconds');
   for(const kind of ['delay','convolver']) for(const result of report.results.filter(result=>result.kind===kind)) {
     assert.equal(result.status,'unavailable');
@@ -184,7 +184,7 @@ test('raw seconds shift frame 1023 on a truncating host at 44.1 kHz; adapter fra
 test('fixture reports label the scheduling conversion and reject malformed options',async()=>{
   const native=nativeAdapter(()=>{throw new Error('offline fixture only');});
   const report=await fixtures.runFixtures(truncatingOffline,{hostTime:native.hostTime,scheduling:'native-adapter-frames'});
-  assert.equal(report.fixtureVersion,7);
+  assert.equal(report.fixtureVersion,8);
   assert.equal(report.scheduling,'native-adapter-frames');
   for(const result of report.results.filter(result=>result.kind==='timing')) {
     assert.equal(result.status,'pass');
@@ -269,7 +269,7 @@ test('an ideal host passes the delay-chain and convolver-identity fixtures at bo
 
 test('topology probes and convolver fit diagnostics behave on an ideal host',async()=>{
   const report=await fixtures.runFixtures(idealMixingOffline);
-  assert.equal(report.fixtureVersion,7);
+  assert.equal(report.fixtureVersion,8);
   for(const kind of fixtures.topologyKinds) for(const result of report.results.filter(result=>result.kind===kind)) {
     assert.equal(result.status,'pass',JSON.stringify(result));
     assert.equal(result.arithmeticError,0);
@@ -280,7 +280,7 @@ test('topology probes and convolver fit diagnostics behave on an ideal host',asy
   assert.deepEqual(report.results.find(result=>result.kind==='fanin'&&result.rate===48000).observedOnsets,[{frame:0,value:2}]);
   assert.deepEqual(report.results.find(result=>result.kind==='fanout-gain'&&result.rate===44100).observedOnsets,[{frame:0,value:1.5}]);
   assert.deepEqual(report.results.find(result=>result.kind==='fanin-gain'&&result.rate===44100).observedOnsets,[{frame:0,value:2}]);
-  assert.equal(report.results.length,26);
+  assert.equal(report.results.length,38);
   assert.equal(report.results.filter(result=>fixtures.dspKinds.includes(result.kind)).every(result=>result.status==='unavailable'),true);
   const convolver=report.results.find(result=>result.kind==='convolver'&&result.rate===48000);
   assert.equal(convolver.fit.length,2);
@@ -290,4 +290,37 @@ test('topology probes and convolver fit diagnostics behave on an ideal host',asy
   const shifted=new Float32Array(1300); for(let i=0;i<1200;i++) shifted[i+3]=response[i]*0.8;
   const fit=fixtures.convolverFit(shifted,response);
   assert.equal(fit.lagFrames,3); assert.ok(Math.abs(fit.scale-0.8)<=1e-6); assert.ok(fit.residual<=1e-6);
+});
+
+test('binaural reference pins tunejs-binaural-v1 on the synthetic table',()=>{
+  const rate=48000, table=fixtures.syntheticHrtfTable(rate), q=fixtures.q16;
+  assert.equal(table.taps,64); assert.equal(table.rows.length,7); assert.equal(table.rows[0].length,2*64); assert.equal(table.rows[3].length,12*2*64);
+  assert.deepEqual(fixtures.nearestHrtfPosition(table,359,0),{row:3,index:0});
+  assert.deepEqual(fixtures.nearestHrtfPosition(table,44,0),{row:3,index:1});
+  assert.deepEqual(fixtures.nearestHrtfPosition(table,45,0),{row:3,index:2});
+  assert.deepEqual(fixtures.nearestHrtfPosition(table,-30,15),{row:3,index:11});
+  assert.deepEqual(fixtures.nearestHrtfPosition(table,123,89),{row:6,index:0});
+  const nonzero=(x,from,to)=>{ const out=[]; for(let i=from;i<to;i++) if(x[i]!==0) out.push([i,x[i]]); return out; };
+  const front=fixtures.binauralFixtureExpected('dsp-binaural-front',rate);
+  assert.deepEqual(nonzero(front[0],0,512),[[16,q(0.5)]]); assert.deepEqual(nonzero(front[1],0,512),[[16,q(0.5)]]);
+  const right=fixtures.binauralFixtureExpected('dsp-binaural-right',rate);
+  assert.deepEqual(nonzero(right[0],0,512),[[28,q(0.1)]]); assert.deepEqual(nonzero(right[1],0,512),[[4,q(0.9)]]);
+  const elevation=fixtures.binauralFixtureExpected('dsp-binaural-elevation',rate);
+  assert.deepEqual(nonzero(elevation[0],0,512),[[16,q(0.5)],[24,q(0.1*Math.sin(Math.PI/3))]]);
+  assert.deepEqual(nonzero(elevation[1],0,512),elevation[0].length && nonzero(elevation[0],0,512));
+  const sixty=fixtures.binauralFixtureExpected('dsp-binaural-mirror',rate), threeHundred=fixtures.binauralFixtureExpected('dsp-binaural-mirror',rate,fixtures.binauralProgram('dsp-binaural-mirror',rate).mirrorAzimuth);
+  assert.equal(fixtures.maxError(sixty[0],threeHundred[1]),0); assert.equal(fixtures.maxError(sixty[1],threeHundred[0]),0);
+  assert.notEqual(fixtures.maxError(sixty[0],sixty[1]),0);
+  const move=fixtures.binauralFixtureExpected('dsp-binaural-move',rate), M=fixtures.binauralMoveFrame, N=fixtures.binauralSmoothingFrames;
+  assert.equal(M%fixtures.binauralTrainPeriodFrames,0); assert.equal(M%128,0);
+  const P=fixtures.binauralTrainPeriodFrames;
+  for(const ear of [0,1]) assert.deepEqual(nonzero(move[ear],0,M),Array.from({length:M/P},(_,k)=>[k*P+16,q(0.5)]));
+  assert.ok(Math.abs(move[0][M+16]-(1-17/N)*q(0.5))<=1e-7, `left main tap fades out: ${move[0][M+16]}`);
+  assert.ok(Math.abs(move[1][M+4]-(5/N)*q(0.9))<=1e-7, `right near tap fades in: ${move[1][M+4]}`);
+  assert.ok(Math.abs(move[1][M+16]-(1-17/N)*q(0.5))<=1e-7);
+  assert.deepEqual(nonzero(move[0],M+P,M+2*P),[[M+P+28,q(0.1)]]); assert.deepEqual(nonzero(move[1],M+P,M+2*P),[[M+P+4,q(0.9)]]);
+  const gain=fixtures.binauralFixtureExpected('dsp-binaural-gain',rate), G=fixtures.binauralGainRampFrames;
+  assert.ok(Math.abs(gain[0][24*P+16]-(1-24*P/G)*q(0.5))<=1e-7, `ramped gain: ${gain[0][24*P+16]}`);
+  assert.deepEqual(nonzero(gain[0],G+P,rate),[]);
+  assert.throws(()=>fixtures.binauralProgram('dsp-binaural-nope',rate),RangeError);
 });

@@ -4,9 +4,10 @@
 // fixture-version-7 dsp-* offline rows cannot judge that host. Expected values come from the same
 // generators as the offline fixtures. Simulator/emulator/headless results are host-graph behavior
 // only — not device output, latency or listening evidence.
-import { convolverFit, convolverSeconds, convolverSeeds, delayTapCount, delayTapSeconds, dspConvolverFixtureExpected, maxError, syntheticImpulseResponse } from './fixtures.js';
+import { convolverFit, convolverSeconds, convolverSeeds, delayTapCount, delayTapSeconds, dspConvolverFixtureExpected, maxError, q16, syntheticHrtfTable, syntheticImpulseResponse } from './fixtures.js';
 
-export const dspLiveProbeVersion = 1;
+// Version 2 adds dsp-binaural-live: the synthetic HRTF table rendered live at azimuth 90° (right).
+export const dspLiveProbeVersion = 2;
 export const dspTrainPeriodFrames = 8192;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -152,6 +153,30 @@ async function mixLive(adapter, context, mute, settleSeconds) {
   } finally { try { source.stop(); } catch { /* finished */ } source.disconnect(); node.close(); node.disconnect(); }
 }
 
+// A looping impulse train through tunejs-binaural-v1 at azimuth 90° with the synthetic table: every period must show
+// the right ear's near tap q16(0.9) 4 frames after the impulse and the left ear's far tap q16(0.1) 28 frames after it.
+async function binauralLive(adapter, context, mute, settleSeconds) {
+  if(typeof adapter.dsp.createBinaural !== 'function') return { probe: 'dsp-binaural-live', status: 'unavailable', reason: 'adapter has no binaural node' };
+  const rate = context.sampleRate;
+  const train = context.createBuffer(1, dspTrainPeriodFrames, rate); train.getChannelData(0)[0] = 1;
+  const source = context.createBufferSource(); source.buffer = train; source.loop = true;
+  const node = adapter.dsp.createBinaural(context, { hrtf: syntheticHrtfTable(rate), smoothingFrames: 256 });
+  const now = context.currentTime;
+  node.gain.setValueAtTime(1, now); node.azimuth.setValueAtTime(90, now); node.elevation.setValueAtTime(0, now);
+  source.connect(node);
+  source.start(context.currentTime + 0.05);
+  try {
+    const capture = await captureThrough(adapter, context, node, mute, settleSeconds);
+    if(capture.pcm.length < 2) return { probe: 'dsp-binaural-live', status: 'inconclusive', reason: 'need two tap channels', tap: { ...capture, pcm: undefined } };
+    const right = peaks(capture.pcm[1]), left = peaks(capture.pcm[0]);
+    const pairs = [];
+    for(const near of right) { const far = left.find(peak => peak.frame === near.frame + 24); if(far) pairs.push({ frame: near.frame, right: near.value, left: far.value }); }
+    const valueError = pairs.length ? Math.max(...pairs.map(pair => Math.max(Math.abs(pair.right - q16(0.9)), Math.abs(pair.left - q16(0.1))))) : null;
+    const status = pairs.length >= 1 && valueError <= 1e-5 && left.length === right.length ? 'pass' : 'fail';
+    return { probe: 'dsp-binaural-live', expected: { rightTapOffset: 4, leftTapOffset: 28, right: q16(0.9), left: q16(0.1) }, leftPeaks: left.slice(0, 4), rightPeaks: right.slice(0, 4), pairCount: pairs.length, valueError, tap: { ...capture, pcm: undefined }, status };
+  } finally { try { source.stop(); } catch { /* finished */ } source.disconnect(); node.close(); node.disconnect(); }
+}
+
 export async function runDspLiveProbes(createContext, adapter, { settleSeconds = 1 } = {}) {
   if(typeof createContext !== 'function') throw new TypeError('runDspLiveProbes needs a createContext function.');
   if(!adapter || typeof adapter !== 'object') throw new TypeError('runDspLiveProbes needs the adapter whose dsp and tapping are under test.');
@@ -171,6 +196,7 @@ export async function runDspLiveProbes(createContext, adapter, { settleSeconds =
     ['dsp-tail-live', () => tailLive(adapter, context, mute, settleSeconds)],
     ['dsp-convolver-live', () => convolverLive(adapter, context, mute, settleSeconds)],
     ['dsp-mix-live', () => mixLive(adapter, context, mute, settleSeconds)],
+    ['dsp-binaural-live', () => binauralLive(adapter, context, mute, settleSeconds)],
   ];
   for(const [name, probe] of probes) {
     try { results.push(await probe()); }

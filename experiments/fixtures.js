@@ -8,8 +8,86 @@
 // Version 7 adds the TuneJS DSP-path fixtures (dsp-delay, dsp-convolver): the same impulse programs run through
 // the adapter's HostDsp processors instead of host DelayNode/ConvolverNode graphs, judged against the same expected
 // vectors (plus the unity dry impulse the DSP convolver node always passes). Tolerance 1e-5, repeat 1e-7.
-export const fixtureVersion = 7;
-export const dspKinds = ['dsp-delay','dsp-convolver'];
+// Version 8 adds the binaural fixtures (dsp-binaural-*): a deterministic synthetic HRTF table rendered through the
+// host's tunejs-binaural-v1 node and compared with `binauralReference`, a direct-convolution implementation of the
+// renderer rules in docs/hrtf-asset.md (nearest position at block start, linear crossfade, a-rate gain). 1e-5.
+export const fixtureVersion = 8;
+export const binauralKinds = ['dsp-binaural-front','dsp-binaural-right','dsp-binaural-mirror','dsp-binaural-elevation','dsp-binaural-move','dsp-binaural-gain'];
+export const dspKinds = ['dsp-delay','dsp-convolver',...binauralKinds];
+export const binauralSmoothingFrames = 256, binauralTrainPeriodFrames = 512, binauralMoveFrame = 24064, binauralGainRampFrames = 24000;
+export const q16 = v => Math.fround(Math.round(v*32767)/32768);
+// Synthetic table: 30° grid, single poles, 64 taps. lateral = sin(az)·cos(el) (right positive); ITD ±12 frames
+// around a 16-frame base (the nearer ear leads), ILD 0.5 ± 0.4·lateral, plus an elevation tap 0.1·sin(el) 8 frames later.
+export function syntheticHrtfTable(rate) {
+  const elevations=[-90,-60,-30,0,30,60,90], step=30, taps=64;
+  const rows=elevations.map(el=>{
+    const count=Math.abs(el)===90?1:360/step;
+    const row=new Float32Array(count*2*taps);
+    for(let p=0;p<count;p++) {
+      const az=p*step, lateral=Math.sin(az*Math.PI/180)*Math.cos(el*Math.PI/180), itd=Math.round(12*lateral);
+      const dL=16+itd, dR=16-itd, gL=q16(0.5-0.4*lateral), gR=q16(0.5+0.4*lateral), gE=q16(0.1*Math.sin(el*Math.PI/180));
+      const L=row.subarray(p*2*taps,p*2*taps+taps), R=row.subarray(p*2*taps+taps,(p+1)*2*taps);
+      L[dL]=gL; R[dR]=gR; L[dL+8]=Math.fround(L[dL+8]+gE); R[dR+8]=Math.fround(R[dR+8]+gE);
+    }
+    return row;
+  });
+  return { id:`synthetic-hrtf-v1-${rate}`, sampleRate:rate, taps, elevations, azimuthStepDegrees:step, rows };
+}
+export function nearestHrtfPosition(table, azimuthDegrees, elevationDegrees) {
+  let row=0;
+  for(let r=1;r<table.elevations.length;r++) if(Math.abs(elevationDegrees-table.elevations[r])<Math.abs(elevationDegrees-table.elevations[row])) row=r;
+  const count=table.rows[row].length/(2*table.taps);
+  if(count===1) return { row, index:0 };
+  const az=((azimuthDegrees%360)+360)%360;
+  return { row, index:Math.round(az/table.azimuthStepDegrees)%count };
+}
+// Timeline semantics identical to src/dsp.ts Timeline.valueAt (set / linear ramp, evaluated at t).
+export function automation(events) {
+  const sorted=[...events].sort((a,b)=>a.t-b.t);
+  return t=>{ let v=0, tPrev=0; for(const e of sorted) { if(e.t<=t) { v=e.v; tPrev=e.t; continue; } if(e.ramp && e.t>tPrev) return v+(e.v-v)*(t-tPrev)/(e.t-tPrev); return v; } return v; };
+}
+// Direct-convolution reference for tunejs-binaural-v1. `controls`: gainAt(t) per sample; azimuthAt(t)/elevationAt(t) at
+// block starts. Returns [left, right] Float32Arrays of input.length.
+export function binauralReference(table, rate, input, controls, smoothingFrames) {
+  const taps=table.taps, N=input.length, BLOCK=128;
+  const x=new Float64Array(N), out=[new Float32Array(N), new Float32Array(N)];
+  const hrir=(pos,ear)=>table.rows[pos.row].subarray(pos.index*2*taps+ear*taps, pos.index*2*taps+(ear+1)*taps);
+  const conv=(h,n)=>{ let y=0; for(let k=0;k<taps && n-k>=0;k++) y+=h[k]*x[n-k]; return y; };
+  let current=nearestHrtfPosition(table,controls.azimuthAt(0),controls.elevationAt(0)), old=null, fade=-1;
+  for(let f0=0;f0<N;f0+=BLOCK) {
+    const t0=f0/rate;
+    if(fade<0) { const target=nearestHrtfPosition(table,controls.azimuthAt(t0),controls.elevationAt(t0)); if(target.row!==current.row || target.index!==current.index) { old=current; current=target; fade=0; } }
+    for(let n=f0;n<Math.min(N,f0+BLOCK);n++) {
+      x[n]=input[n]*controls.gainAt(n/rate);
+      for(let ear=0;ear<2;ear++) {
+        let y=conv(hrir(current,ear),n);
+        if(fade>=0) { const w=(fade+1)/smoothingFrames; y=(1-w)*conv(hrir(old,ear),n)+w*y; }
+        out[ear][n]=y;
+      }
+      if(fade>=0 && ++fade>=smoothingFrames) fade=-1;
+    }
+  }
+  return out;
+}
+export function binauralProgram(kind, rate) {
+  const impulse=new Float32Array(rate); impulse[0]=1;
+  const train=new Float32Array(rate); for(let i=0;i<rate;i+=binauralTrainPeriodFrames) train[i]=1;
+  const base={ input:impulse, gain:[{t:0,v:1,ramp:false}], azimuth:[{t:0,v:0,ramp:false}], elevation:[{t:0,v:0,ramp:false}] };
+  switch(kind) {
+    case 'dsp-binaural-front': return base;
+    case 'dsp-binaural-right': return { ...base, azimuth:[{t:0,v:90,ramp:false}] };
+    case 'dsp-binaural-mirror': return { ...base, azimuth:[{t:0,v:60,ramp:false}], mirrorAzimuth:[{t:0,v:300,ramp:false}] };
+    case 'dsp-binaural-elevation': return { ...base, elevation:[{t:0,v:60,ramp:false}] };
+    case 'dsp-binaural-move': return { ...base, input:train, azimuth:[{t:0,v:0,ramp:false},{t:binauralMoveFrame/rate,v:90,ramp:false}] };
+    case 'dsp-binaural-gain': return { ...base, input:train, gain:[{t:0,v:1,ramp:false},{t:binauralGainRampFrames/rate,v:0,ramp:true}] };
+    default: throw new RangeError(`Unknown binaural fixture ${kind}.`);
+  }
+}
+export function binauralFixtureExpected(kind, rate, azimuthOverride) {
+  const program=binauralProgram(kind,rate);
+  const controls={ gainAt:automation(program.gain), azimuthAt:automation(azimuthOverride ?? program.azimuth), elevationAt:automation(program.elevation) };
+  return binauralReference(syntheticHrtfTable(rate), rate, program.input, controls, binauralSmoothingFrames);
+}
 export const rawSeconds = (frame, rate) => frame / rate;
 export const impulseFrames = [0, 127, 128, 129, 511, 1023, 1024, 8000, 16000, 24000, 32000, 40000];
 export function summarize(channels) {
@@ -108,12 +186,28 @@ export function convolverFit(output, expected) {
 export function dspConvolverFixtureExpected(rate) {
   return convolverFixtureExpected(rate).map(expected=>{ expected[0]=Math.fround(expected[0]+1); return expected; });
 }
-async function renderDsp(context, kind, rate, hostTime, dsp) {
+function applyAutomation(param, events) {
+  for(const e of events) { if(e.ramp) param.linearRampToValueAtTime(e.v,e.t); else param.setValueAtTime(e.v,e.t); }
+}
+async function renderDsp(context, kind, rate, hostTime, dsp, azimuthOverride) {
   if(!dsp) return { unavailable:'TuneJS DSP path absent' };
   // A host whose offline context cannot run the DSP path says so with UNSUPPORTED (e.g. native offline
   // contexts do not sum inputs); that is a documented host limit, not a fixture failure.
   try { await dsp.load(context); }
   catch(error) { if(error && error.code==='UNSUPPORTED') return { unavailable:`TuneJS DSP path unsupported on this context: ${error.message}` }; throw error; }
+  if(binauralKinds.includes(kind)) {
+    if(typeof dsp.createBinaural!=='function') return { unavailable:'TuneJS binaural node absent' };
+    const program=binauralProgram(kind,rate);
+    const buffer=context.createBuffer(1,rate,rate); buffer.getChannelData(0).set(program.input);
+    const source=context.createBufferSource(); source.buffer=buffer;
+    const node=dsp.createBinaural(context,{hrtf:syntheticHrtfTable(rate),smoothingFrames:binauralSmoothingFrames});
+    applyAutomation(node.gain,program.gain); applyAutomation(node.azimuth,azimuthOverride ?? program.azimuth); applyAutomation(node.elevation,program.elevation);
+    source.connect(node); node.connect(context.destination);
+    source.start(hostTime(0,rate));
+    const start=performance.now(); const output=await context.startRendering();
+    node.close();
+    return { channels:[output.getChannelData(0),output.getChannelData(1)], renderMs:performance.now()-start };
+  }
   const impulse=context.createBuffer(1,1,rate); impulse.getChannelData(0)[0]=1;
   const source=context.createBufferSource(); source.buffer=impulse;
   let node;
@@ -170,11 +264,11 @@ async function renderMixing(context, kind, rate, hostTime) {
   const start=performance.now(); const output=await context.startRendering();
   return { channels:[output.getChannelData(0),output.getChannelData(1)], renderMs:performance.now()-start };
 }
-export async function renderFixture(createOffline, kind, rate=48000, pan=-0.75, hostTime=rawSeconds, dsp=undefined) {
+export async function renderFixture(createOffline, kind, rate=48000, pan=-0.75, hostTime=rawSeconds, dsp=undefined, azimuthOverride=undefined) {
   if(typeof hostTime !== 'function') throw new TypeError('hostTime must be a function (frame, rate) => seconds.');
   const length = rate;
   const context = createOffline({ numberOfChannels: 2, length, sampleRate: rate });
-  if(dspKinds.includes(kind)) return renderDsp(context, kind, rate, hostTime, dsp);
+  if(dspKinds.includes(kind)) return renderDsp(context, kind, rate, hostTime, dsp, azimuthOverride);
   if(kind === 'delay' || kind === 'convolver' || topologyKinds.includes(kind)) return renderMixing(context, kind, rate, hostTime);
   const buffer = context.createBuffer(1, length, rate);
   const samples = buffer.getChannelData(0);
@@ -256,9 +350,22 @@ export async function runFixtures(createOffline, options={}) {
         arithmeticError=Math.max(...output.channels.map((x,i)=>maxError(x,expected[i])));
         fit=output.channels.map((x,i)=>convolverFit(x,expected[i].subarray(0,Math.round(convolverSeconds*rate))));
       }
+      if(binauralKinds.includes(kind)) {
+        const expected=binauralFixtureExpected(kind,rate);
+        arithmeticError=Math.max(...output.channels.map((x,i)=>maxError(x,expected[i])));
+        observedOnsets=[];
+        for(let frame=0;frame<output.channels[0].length && observedOnsets.length<8;frame++) if(output.channels[0][frame]!==0 || output.channels[1][frame]!==0) observedOnsets.push({frame,left:output.channels[0][frame],right:output.channels[1][frame]});
+        if(kind==='dsp-binaural-mirror') {
+          // The mirrored azimuth (300°) must swap ears exactly against the 60° render and match its own reference.
+          const mirror=await renderFixture(createOffline,kind,rate,-0.75,hostTime,dsp,binauralProgram(kind,rate).mirrorAzimuth);
+          mirrorError=Math.max(maxError(output.channels[0],mirror.channels[1]),maxError(output.channels[1],mirror.channels[0]));
+          const mirrorExpected=binauralFixtureExpected(kind,rate,binauralProgram(kind,rate).mirrorAzimuth);
+          arithmeticError=Math.max(arithmeticError,...mirror.channels.map((x,i)=>maxError(x,mirrorExpected[i])));
+        }
+      }
       const pass=stats.every(x=>x.nonfinite===0 && x.peak>0) && repeatError<=1e-7 && (arithmeticError===null || arithmeticError<=1e-5) && (mirrorError===null || mirrorError<=1e-5);
       results.push({kind,rate,status:pass?'pass':'fail',stats,repeatError,arithmeticError,mirrorError,observedOnsets,timing,fit,renderMs:output.renderMs,
-        scope:kind==='hrtf'?'finite/nonzero/repeated fixed pose only; NOT localization/reference acceptance':kind==='filter'?'finite/repeatable smoke; NOT cross-backend reference acceptance':kind==='convolver'?'impulse-response identity through the host convolver; NOT a reverb quality judgement':dspKinds.includes(kind)?'TuneJS DSP-path identity on this host (worklet processor); the realtime factor is renderMs/1000':topologyKinds.includes(kind)?'graph topology probe':'arithmetic fixture'});
+        scope:kind==='hrtf'?'finite/nonzero/repeated fixed pose only; NOT localization/reference acceptance':kind==='filter'?'finite/repeatable smoke; NOT cross-backend reference acceptance':kind==='convolver'?'impulse-response identity through the host convolver; NOT a reverb quality judgement':binauralKinds.includes(kind)?'tunejs-binaural-v1 against the direct-convolution reference on a synthetic table; NOT a localization or listening judgement':dspKinds.includes(kind)?'TuneJS DSP-path identity on this host (worklet processor); the realtime factor is renderMs/1000':topologyKinds.includes(kind)?'graph topology probe':'arithmetic fixture'});
     } catch(error) { results.push({kind,rate,status:'error',error:String(error)}); }
   }
   return {fixtureVersion,scheduling,results};

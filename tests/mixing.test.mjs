@@ -159,3 +159,47 @@ test('host failure inside an effect cleans partial nodes and start can retry',as
   await e2.start();assert.equal(e2.state,'running');
   await e2.dispose();
 });
+
+// TuneJS DSP path: a fake HostDsp; the effect node is a single processor with a `mix` HostParam.
+function dspHost(){
+  const h=host();
+  const nodes=[];
+  const mkdsp=(kind,spec)=>({kind,spec,connections:[],disconnects:0,closes:0,connect(t){this.connections.push(t);},disconnect(){this.disconnects++;},
+    mix:{value:0,calls:[],setValueAtTime(v,t){this.calls.push(['set',v,t]);this.value=v;},linearRampToValueAtTime(v,t){this.calls.push(['ramp',v,t]);this.value=v;},cancelScheduledValues(t){this.calls.push(['cancel',t]);}},
+    close(){this.closes++;}});
+  const dsp={async load(){},createDelay(context,spec){const n=mkdsp('delay',spec);nodes.push(n);return n;},createConvolver(context,spec){const n=mkdsp('convolver',spec);nodes.push(n);return n;}};
+  const adapter={hostLimits:{fanOut:true},name:'mixing-test-double',createContext(){return h.context;},setEnded(node,fn){node.onEnded=fn;},hostTime(frame,rate){return frame/rate;},dsp};
+  return {...h,engine:new Engine({adapter}),dsp,nodes};
+}
+
+test('dsp path: one processor node, mix bound through the HostParam, closed on dispose',async()=>{
+  const h=dspHost(),e=h.engine;
+  const delay=e.delay({time:{seconds:0.01},feedback:0.5,taps:3,mix:0.3});
+  const source=e.oscillator();source.connect(delay).connect(e.output);
+  await e.start();
+  assert.equal(h.nodes.length,1);
+  assert.deepEqual(h.nodes[0].spec,{delayFrames:480,taps:3,feedback:0.5});
+  assert.equal(h.delays.length,0,'no host delay chain');
+  assert.deepEqual(h.nodes[0].mix.calls,[['set',0.3,0]]);
+  delay.mix.rampTo(1,{seconds:0.1});
+  assert.deepEqual(h.nodes[0].mix.calls.slice(1),[['cancel',0],['set',0.3,0],['ramp',1,0.1]]);
+  assert.ok(source.host.connections.includes(h.nodes[0]));
+  delay.dispose();
+  assert.equal(h.nodes[0].closes,1);
+  await e.dispose();
+});
+
+test('dsp path: reverb uses createConvolver with the synthetic response',async()=>{
+  const h=dspHost(),e=h.engine;
+  const reverb=e.reverb({decay:{seconds:0.5},mix:0.25});
+  e.oscillator().connect(reverb).connect(e.output);
+  await e.start();
+  assert.equal(h.nodes.length,1);assert.equal(h.nodes[0].kind,'convolver');
+  const response=h.nodes[0].spec.response;
+  assert.equal(response.length,2);
+  assert.deepEqual([...response[0]],[...syntheticReverbResponse(0.5,48000)[0]]);
+  assert.equal(h.convolvers.length,0,'no host convolver');
+  assert.deepEqual(h.nodes[0].mix.calls,[['set',0.25,0]]);
+  await e.dispose();
+  assert.equal(h.nodes[0].closes,1);
+});

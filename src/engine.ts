@@ -42,6 +42,7 @@ export class Engine {
   /** @internal */ readonly taps = new Set<Tap>();
   /** @internal */ readonly adapter: Adapter;
   #context?: HostContext;
+  #dspPending = false;
   #master?: HostGain;
   #noiseBuffers = new Map<number, HostBuffer>();
   #assets = new Map<string, SampleEntry>();
@@ -54,7 +55,7 @@ export class Engine {
     this.transport = new Transport(this);
     this.listener = new Listener(this);
     const fanOut = this.adapter.hostLimits.fanOut;
-    this.capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, kits: true, transport: true, patterns: true, fanOut, delay: fanOut, reverb: fanOut, spatial: true, binaural: false, stereoSpatial: true, taps: !!this.adapter.tapping, capture: !!this.adapter.capture, recorder: !!this.adapter.tapping, meters: !!this.adapter.tapping, projects: true, offline: false, backgroundPlayback: false });
+    this.capabilities = Object.freeze({ oscillator: true, gain: true, filter: true, instrument: true, presets: true, samples: true, mixing: true, kits: true, transport: true, patterns: true, fanOut, delay: fanOut || !!this.adapter.dsp, reverb: fanOut || !!this.adapter.dsp, spatial: true, binaural: false, stereoSpatial: true, taps: !!this.adapter.tapping, capture: !!this.adapter.capture, recorder: !!this.adapter.tapping, meters: !!this.adapter.tapping, projects: true, offline: false, backgroundPlayback: false });
   }
   get state(): EngineState {
     if (this.#state === 'running' && this.#context?.state !== 'running') return this.#context?.state === 'suspended' ? 'suspended' : 'interrupted';
@@ -93,15 +94,30 @@ export class Engine {
         this.#master = master;
       }
       this.output.host = this.#master;
-      for (const node of this.nodes) this.materialize(node);
-      for (const node of this.nodes) if (node !== this.output) node.reconnect();
+      // With a TuneJS DSP path, effects must wait for the worklet module: defer materialization
+      // until load() resolves inside the activation chain. resume() still runs synchronously.
+      const dsp = this.adapter.dsp;
+      const ready = dsp ? dsp.load(this.#context) : undefined;
+      if (dsp) this.#dspPending = true;
+      else {
+        for (const node of this.nodes) this.materialize(node);
+        for (const node of this.nodes) if (node !== this.output) node.reconnect();
+      }
       // Must be invoked synchronously in the caller's gesture, before any await.
       const activation = this.#context.resume();
-      this.#starting = activation.then(() => {
+      this.#starting = activation.then(async () => {
         this.assertAlive();
+        if (ready) {
+          await ready;
+          this.assertAlive();
+          this.#dspPending = false;
+          for (const node of this.nodes) this.materialize(node);
+          for (const node of this.nodes) if (node !== this.output) node.reconnect();
+        }
         if (this.#context?.state !== 'running') throw new Error(`Host remained ${this.#context?.state}`);
         this.#state = 'running';
       }).catch(cause => {
+        this.#dspPending = false;
         if (this.#state === 'disposed') throw new TuneError('DISPOSED', 'Engine disposed during activation.', 'Create a new engine.', { cause });
         this.#state = 'failed';
         throw new TuneError('ACTIVATION_FAILED', 'Could not activate audio output.', 'Retry from a user gesture; check audio route and host permissions.', { cause });
@@ -289,12 +305,12 @@ export class Engine {
   }
   delay(options: { time?: Seconds; feedback?: number; mix?: number; taps?: number } = {}): Delay {
     this.assertAlive();
-    if (!this.adapter.hostLimits.fanOut) throw new TuneError('UNSUPPORTED', 'Parallel wet/dry effects are unsupported on this host.', 'Use the browser adapter, or wait for the TuneJS DSP effect path.');
+    if (!this.adapter.hostLimits.fanOut && !this.adapter.dsp) throw new TuneError('UNSUPPORTED', 'Parallel wet/dry effects are unsupported on this host.', 'Use the browser adapter, or wait for the TuneJS DSP effect path.');
     return this.add(new Delay(this, options));
   }
   reverb(options: { decay?: Seconds; mix?: number } = {}): Reverb {
     this.assertAlive();
-    if (!this.adapter.hostLimits.fanOut) throw new TuneError('UNSUPPORTED', 'Parallel wet/dry effects are unsupported on this host.', 'Use the browser adapter, or wait for the TuneJS DSP effect path.');
+    if (!this.adapter.hostLimits.fanOut && !this.adapter.dsp) throw new TuneError('UNSUPPORTED', 'Parallel wet/dry effects are unsupported on this host.', 'Use the browser adapter, or wait for the TuneJS DSP effect path.');
     return this.add(new Reverb(this, options));
   }
   clearAssets(): number {
@@ -316,7 +332,9 @@ export class Engine {
     this.nodes.add(node); return node;
   }
   private materialize(node: GraphNode): void {
-    if (!this.#context || node.host) return;
+    // While the DSP module loads, start()'s chain materializes everything once it resolves —
+    // nodes added during activation must not be prepared twice.
+    if (!this.#context || node.host || this.#dspPending) return;
     node.prepare(this.#context);
   }
   dispose(): Promise<void> {

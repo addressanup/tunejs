@@ -1,5 +1,5 @@
 import { encodeWav, resample } from './assets.js';
-import { BlockConvolver, Biquad, Timeline, biquadCoeffs, noiseBufferData, oscillatorValue } from './dsp.js';
+import { BLOCK, Biquad, ConvolverEffect, DelayEffect, Timeline, biquadCoeffs, delayFramesFor, noiseBufferData, oscillatorValue } from './dsp.js';
 import type { BiquadCoeffs } from './dsp.js';
 import { TuneError, finite } from './errors.js';
 import { adsValueAt, envelopeEvents, noteToFrequency } from './instrument.js';
@@ -18,7 +18,6 @@ export interface RenderResult {
   encode(options: { format: 'wav' }): { bytes: ArrayBuffer; clippedSamples: number };
 }
 
-const BLOCK = 128;
 const STEAL_SECONDS = 0.02;
 
 interface VoiceLayer {
@@ -50,9 +49,7 @@ interface Runtime {
   filterTimeline?: Timeline;
   filterType?: 'lowpass' | 'highpass';
   biquads: Biquad[];
-  delayLine?: Float64Array[]; delayWrite?: number; delayD?: number;
-  convolvers?: BlockConvolver[];
-  wet?: Float64Array[];
+  effect?: DelayEffect | ConvolverEffect;
   spatial?: { pan: number; gain: number };
   oscPhase?: number;
   maxVoices: number;
@@ -137,7 +134,7 @@ export async function renderProject(project: unknown, options: {
       case 'gain': timeline.set(def.params.gain, 0); break;
       case 'bus': timeline.set(10 ** (def.params.gainDb / 20), 0); break;
       case 'pan': timeline.set(def.params.pan, 0); rt.channels = 2; break;
-      case 'delay': timeline.set(def.params.mix, 0); break;
+      case 'delay': timeline.set(def.params.mix, 0); rt.channels = 2; break;
       case 'reverb': timeline.set(def.params.mix, 0); rt.channels = 2; break;
       case 'instrument': timeline.set(def.params.level, 0); rt.filterTimeline = new Timeline(); rt.filterTimeline.set(def.params.filterHz, 0); rt.filterType = def.preset.filter?.type; rt.maxVoices = def.maxVoices; break;
       case 'kit': timeline.set(def.params.level, 0); rt.maxVoices = def.maxVoices; break;
@@ -156,7 +153,7 @@ export async function renderProject(project: unknown, options: {
   }
   // Channel counts for pass-through nodes = max input count.
   for (const rt of runtimes.values()) {
-    if (rt.def.type !== 'pan' && rt.def.type !== 'spatial' && rt.def.type !== 'reverb') {
+    if (rt.def.type !== 'pan' && rt.def.type !== 'spatial' && rt.def.type !== 'reverb' && rt.def.type !== 'delay') {
       if (rt.def.type === 'sample') rt.channels = Math.min(2, assets.get(rt.def.assetId)!.channels.length);
       else if (rt.inputs.length) rt.channels = Math.max(...rt.inputs.map(input => input.channels));
     }
@@ -178,14 +175,10 @@ export async function renderProject(project: unknown, options: {
     if (rt.def.type === 'filter') { const d = rt.def; rt.filterTimeline = new Timeline(); rt.filterTimeline.set(d.params.frequencyHz, 0); rt.filterType = d.filterType; }
     if (rt.def.type === 'delay') {
       const def = rt.def;
-      const d = Math.max(1, Math.round(def.timeSeconds * sampleRate));
-      rt.delayD = d; rt.delayWrite = 0;
-      rt.delayLine = Array.from({ length: rt.channels }, () => new Float64Array(d * def.taps + BLOCK));
+      rt.effect = new DelayEffect(2, delayFramesFor(def.timeSeconds, sampleRate), def.taps, def.feedback);
     }
     if (rt.def.type === 'reverb') {
-      const ir = syntheticReverbResponse((rt.def as { decaySeconds: number }).decaySeconds, sampleRate);
-      rt.convolvers = [new BlockConvolver(ir[0]!), new BlockConvolver(ir[1]!)];
-      rt.wet = [new Float64Array(BLOCK), new Float64Array(BLOCK)];
+      rt.effect = new ConvolverEffect(syntheticReverbResponse((rt.def as { decaySeconds: number }).decaySeconds, sampleRate));
     }
     if (rt.filterType || (rt.def.type === 'filter')) {
       const freq = rt.filterTimeline!.valueAt(0);
@@ -358,33 +351,8 @@ export async function renderProject(project: unknown, options: {
           }
           break;
         }
-        case 'delay': {
-          const input = blockIn(rt, blockLen);
-          const taps = def.taps; const d = rt.delayD!; const line = rt.delayLine!;
-          for (let c = 0; c < rt.channels; c++) {
-            const src = input[c]!; const dst = rt.out[c]!; const ring = line[c]!;
-            const size = d * taps + BLOCK;
-            let write = rt.delayWrite! % size;
-            for (let i = 0; i < blockLen; i++) {
-              ring[write] = src[i]!;
-              let wet = 0;
-              for (let k = 1; k <= taps; k++) wet += ring[(write - k * d + size * 2) % size]! * def.feedback ** k;
-              dst[i] = src[i]! + wet * rt.timeline.valueAt(t0 + i / sampleRate);
-              write = (write + 1) % size;
-            }
-          }
-          rt.delayWrite = (rt.delayWrite! + blockLen) % (d * taps + BLOCK);
-          break;
-        }
-        case 'reverb': {
-          const input = blockIn(rt, blockLen);
-          const mix = rt.timeline;
-          for (let c = 0; c < 2; c++) {
-            const src = input[Math.min(c, input.length - 1)]!;
-            rt.convolvers![c]!.process(padBlock(src, blockLen), rt.wet![c]!);
-            const dst = rt.out[c]!;
-            for (let i = 0; i < blockLen; i++) dst[i] = src[i]! + rt.wet![c]![i]! * mix.valueAt(t0 + i / sampleRate);
-          }
+        case 'delay': case 'reverb': {
+          rt.effect!.process(blockIn(rt, blockLen), rt.out, rt.timeline, t0, sampleRate, blockLen);
           break;
         }
         default: break;
@@ -408,8 +376,3 @@ export async function renderProject(project: unknown, options: {
   };
 }
 
-function padBlock(src: Float64Array, len: number): Float64Array {
-  if (len === BLOCK) return src;
-  const out = new Float64Array(BLOCK); out.set(src.subarray(0, len));
-  return out;
-}

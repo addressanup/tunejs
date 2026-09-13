@@ -7,9 +7,11 @@ import { livingLoop } from './generated/living-loop';
 import { spatialPlayground } from './generated/spatial-playground';
 import { runFixtures } from './generated/fixtures';
 import { runLiveProbes } from './generated/live-probes';
+import { runDspLiveProbes } from './generated/dsp-live-probes';
+import { createSynchronizable, scheduleOnRN } from 'react-native-worklets';
 
 export default function App() {
-  const adapter = nativeAdapter(() => new AudioContext());
+  const adapter = nativeAdapter(() => new AudioContext(), { worklets: { createSynchronizable, scheduleOnRN } });
   const [sound] = useState(() => firstSound(adapter));
   const [loop] = useState(() => livingLoop(adapter));
   const [scene] = useState(() => spatialPlayground(adapter));
@@ -26,12 +28,15 @@ export default function App() {
       try {
         const createOffline = (o: {numberOfChannels:number;length:number;sampleRate:number}) => new OfflineAudioContext(o);
         const raw = await runFixtures(createOffline);
-        const scheduled = await runFixtures(createOffline, {hostTime: adapter.hostTime, scheduling: 'native-adapter-frames'});
+        const scheduled = await runFixtures(createOffline, {hostTime: adapter.hostTime, scheduling: 'native-adapter-frames', dsp: adapter.dsp});
         let live;
         try { live = await runLiveProbes(() => new AudioContext(), { settleMs: 600 }); } catch(error) { live = { status: 'error', error: String(error) }; }
+        let dspLive;
+        try { dspLive = await runDspLiveProbes(() => new AudioContext(), adapter, { settleSeconds: 1 }); }
+        catch(error) { dspLive = { status: 'error', error: String(error) }; }
         const constants = Platform.constants as { Model?: string; Brand?: string; Manufacturer?: string; systemName?: string };
         const device = { model: constants.Model ?? null, brand: constants.Brand ?? null, manufacturer: constants.Manufacturer ?? null, systemName: constants.systemName ?? null };
-        const data = {date:new Date().toISOString(),platform:Platform.OS,version:Platform.Version,rn:Platform.constants.reactNativeVersion,device,scope:'offline PCM + live graph probes on the running host; not a listening or latency measurement',...raw,adapterScheduled:scheduled,live};
+        const data = {date:new Date().toISOString(),platform:Platform.OS,version:Platform.Version,rn:Platform.constants.reactNativeVersion,device,scope:'offline PCM + live graph probes on the running host; not a listening or latency measurement',...raw,adapterScheduled:scheduled,live,dspLive};
         if(alive) setResults(JSON.stringify(data,null,2));
         const endpoints = Platform.OS === 'android' ? ['http://10.0.2.2:4173','http://127.0.0.1:4173'] : ['http://127.0.0.1:4173'];
         let posted = false; let attempts = 0; let lastError: unknown;
@@ -73,6 +78,6 @@ export default function App() {
     <Button title="Stop scene" onPress={() => void act(scene.stop)} />
     <Button title="Rotate listener" onPress={() => void act(() => { yaw.current += 0.5; scene.rotateListener(yaw.current); })} />
     <Text selectable>{status}</Text>
-    <Text selectable>{`capture capability: ${sound.engine.capabilities.capture}`}</Text><View><Text selectable>{results}</Text></View>
+    <Text selectable>{`capture capability: ${sound.engine.capabilities.capture} · taps: ${sound.engine.capabilities.taps} · delay: ${sound.engine.capabilities.delay}`}</Text><View><Text selectable>{results}</Text></View>
   </ScrollView>;
 }

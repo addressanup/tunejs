@@ -13,7 +13,9 @@
     "./three": {"types": "./dist/three.d.ts", "default": "./dist/three.js"}
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/bundle-worklet.mjs --check",
+    "prepare:worklet": "tsc -p tsconfig.json && node scripts/bundle-worklet.mjs && tsc -p tsconfig.json",
+    "check:worklet": "node scripts/bundle-worklet.mjs --check",
     "test": "npm run build && node --test tests/*.test.mjs",
     "dev": "npm run build && node scripts/serve.mjs",
     "experiment:cpp": "node scripts/cpp-experiment.mjs",

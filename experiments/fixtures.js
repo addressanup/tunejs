@@ -5,7 +5,11 @@
 // Version 4 adds the delay-chain and convolver-identity mixing fixtures (tolerance 1e-5, see below).
 // Version 5 adds graph-topology probes (single delay, source fan-out, destination fan-in) and a convolver fit diagnostic.
 // Version 6 adds the master-gain variants of the fan-out/fan-in probes.
-export const fixtureVersion = 6;
+// Version 7 adds the TuneJS DSP-path fixtures (dsp-delay, dsp-convolver): the same impulse programs run through
+// the adapter's HostDsp processors instead of host DelayNode/ConvolverNode graphs, judged against the same expected
+// vectors (plus the unity dry impulse the DSP convolver node always passes). Tolerance 1e-5, repeat 1e-7.
+export const fixtureVersion = 7;
+export const dspKinds = ['dsp-delay','dsp-convolver'];
 export const rawSeconds = (frame, rate) => frame / rate;
 export const impulseFrames = [0, 127, 128, 129, 511, 1023, 1024, 8000, 16000, 24000, 32000, 40000];
 export function summarize(channels) {
@@ -101,6 +105,30 @@ export function convolverFit(output, expected) {
   }
   return best;
 }
+export function dspConvolverFixtureExpected(rate) {
+  return convolverFixtureExpected(rate).map(expected=>{ expected[0]=Math.fround(expected[0]+1); return expected; });
+}
+async function renderDsp(context, kind, rate, hostTime, dsp) {
+  if(!dsp) return { unavailable:'TuneJS DSP path absent' };
+  // A host whose offline context cannot run the DSP path says so with UNSUPPORTED (e.g. native offline
+  // contexts do not sum inputs); that is a documented host limit, not a fixture failure.
+  try { await dsp.load(context); }
+  catch(error) { if(error && error.code==='UNSUPPORTED') return { unavailable:`TuneJS DSP path unsupported on this context: ${error.message}` }; throw error; }
+  const impulse=context.createBuffer(1,1,rate); impulse.getChannelData(0)[0]=1;
+  const source=context.createBufferSource(); source.buffer=impulse;
+  let node;
+  if(kind==='dsp-delay') node=dsp.createDelay(context,{delayFrames:Math.round(delayTapSeconds*rate),taps:delayTapCount,feedback:0.5});
+  else {
+    const frames=Math.round(convolverSeconds*rate);
+    node=dsp.createConvolver(context,{response:convolverSeeds.map(seed=>syntheticImpulseResponse(frames,seed))});
+  }
+  node.mix.setValueAtTime(1,0);
+  source.connect(node); node.connect(context.destination);
+  source.start(hostTime(0,rate));
+  const start=performance.now(); const output=await context.startRendering();
+  node.close();
+  return { channels:[output.getChannelData(0),output.getChannelData(1)], renderMs:performance.now()-start };
+}
 async function renderMixing(context, kind, rate, hostTime) {
   const impulse=context.createBuffer(1,1,rate); impulse.getChannelData(0)[0]=1;
   const source=context.createBufferSource(); source.buffer=impulse;
@@ -142,10 +170,11 @@ async function renderMixing(context, kind, rate, hostTime) {
   const start=performance.now(); const output=await context.startRendering();
   return { channels:[output.getChannelData(0),output.getChannelData(1)], renderMs:performance.now()-start };
 }
-export async function renderFixture(createOffline, kind, rate=48000, pan=-0.75, hostTime=rawSeconds) {
+export async function renderFixture(createOffline, kind, rate=48000, pan=-0.75, hostTime=rawSeconds, dsp=undefined) {
   if(typeof hostTime !== 'function') throw new TypeError('hostTime must be a function (frame, rate) => seconds.');
   const length = rate;
   const context = createOffline({ numberOfChannels: 2, length, sampleRate: rate });
+  if(dspKinds.includes(kind)) return renderDsp(context, kind, rate, hostTime, dsp);
   if(kind === 'delay' || kind === 'convolver' || topologyKinds.includes(kind)) return renderMixing(context, kind, rate, hostTime);
   const buffer = context.createBuffer(1, length, rate);
   const samples = buffer.getChannelData(0);
@@ -173,13 +202,15 @@ export async function renderFixture(createOffline, kind, rate=48000, pan=-0.75, 
 export async function runFixtures(createOffline, options={}) {
   const hostTime=options.hostTime ?? rawSeconds;
   const scheduling=options.scheduling ?? (options.hostTime ? 'custom' : 'raw-seconds');
+  const dsp=options.dsp;
   if(typeof hostTime !== 'function' || typeof scheduling !== 'string' || !scheduling) throw new TypeError('runFixtures options require a hostTime function and a nonempty scheduling label.');
+  if(dsp!==undefined && (typeof dsp!=='object' || dsp===null || typeof dsp.load!=='function' || typeof dsp.createDelay!=='function' || typeof dsp.createConvolver!=='function')) throw new TypeError('runFixtures dsp option must be a HostDsp ({ load, createDelay, createConvolver }).');
   const results=[];
-  for(const rate of [44100,48000]) for(const kind of ['timing','filter','pan','hrtf','delay','convolver',...topologyKinds]) {
+  for(const rate of [44100,48000]) for(const kind of ['timing','filter','pan','hrtf','delay','convolver',...topologyKinds,...dspKinds]) {
     try {
-      const output=await renderFixture(createOffline,kind,rate,-0.75,hostTime);
+      const output=await renderFixture(createOffline,kind,rate,-0.75,hostTime,dsp);
       if(output.unavailable) { results.push({kind,rate,status:'unavailable',reason:output.unavailable}); continue; }
-      const repeat=await renderFixture(createOffline,kind,rate,-0.75,hostTime);
+      const repeat=await renderFixture(createOffline,kind,rate,-0.75,hostTime,dsp);
       const stats=summarize(output.channels);
       const repeatError=Math.max(...output.channels.map((x,i)=>maxError(x,repeat.channels[i])));
       let arithmeticError=null, mirrorError=null, observedOnsets=null, timing=null, fit=null;
@@ -214,9 +245,20 @@ export async function runFixtures(createOffline, options={}) {
         observedOnsets=[];
         for(let frame=0;frame<output.channels[0].length && observedOnsets.length<8;frame++) if(output.channels[0][frame]!==0) observedOnsets.push({frame,value:output.channels[0][frame]});
       }
+      if(kind==='dsp-delay') {
+        const expected=delayFixtureExpected(rate);
+        arithmeticError=Math.max(...output.channels.map(x=>maxError(x,expected)));
+        observedOnsets=[];
+        for(let frame=0;frame<output.channels[0].length && observedOnsets.length<8;frame++) if(output.channels[0][frame]!==0) observedOnsets.push({frame,value:output.channels[0][frame]});
+      }
+      if(kind==='dsp-convolver') {
+        const expected=dspConvolverFixtureExpected(rate);
+        arithmeticError=Math.max(...output.channels.map((x,i)=>maxError(x,expected[i])));
+        fit=output.channels.map((x,i)=>convolverFit(x,expected[i].subarray(0,Math.round(convolverSeconds*rate))));
+      }
       const pass=stats.every(x=>x.nonfinite===0 && x.peak>0) && repeatError<=1e-7 && (arithmeticError===null || arithmeticError<=1e-5) && (mirrorError===null || mirrorError<=1e-5);
       results.push({kind,rate,status:pass?'pass':'fail',stats,repeatError,arithmeticError,mirrorError,observedOnsets,timing,fit,renderMs:output.renderMs,
-        scope:kind==='hrtf'?'finite/nonzero/repeated fixed pose only; NOT localization/reference acceptance':kind==='filter'?'finite/repeatable smoke; NOT cross-backend reference acceptance':kind==='convolver'?'impulse-response identity through the host convolver; NOT a reverb quality judgement':topologyKinds.includes(kind)?'graph topology probe':'arithmetic fixture'});
+        scope:kind==='hrtf'?'finite/nonzero/repeated fixed pose only; NOT localization/reference acceptance':kind==='filter'?'finite/repeatable smoke; NOT cross-backend reference acceptance':kind==='convolver'?'impulse-response identity through the host convolver; NOT a reverb quality judgement':dspKinds.includes(kind)?'TuneJS DSP-path identity on this host (worklet processor); the realtime factor is renderMs/1000':topologyKinds.includes(kind)?'graph topology probe':'arithmetic fixture'});
     } catch(error) { results.push({kind,rate,status:'error',error:String(error)}); }
   }
   return {fixtureVersion,scheduling,results};

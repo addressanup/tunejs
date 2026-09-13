@@ -1,6 +1,21 @@
-import { mulberry32 } from './mixing.js';
+/** Deterministic mulberry32 PRNG — shared by noise layers, reverb IRs, and fixtures. */
+export function mulberry32(seed: number) {
+  let state = seed >>> 0;
+  return () => { state = (state + 0x6D2B79F5) >>> 0; let t = state; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+
+/** Render quantum — the worklet block size and the offline renderer's block size. */
+export const BLOCK = 128;
+
+/** Integer delay length shared by live Delay nodes and the offline renderer. */
+export function delayFramesFor(timeSeconds: number, sampleRate: number): number {
+  return Math.max(1, Math.round(timeSeconds * sampleRate));
+}
 
 interface TimelineEvent { t: number; v: number; ramp: boolean }
+
+/** Anything a-rate automation can be read from — Timeline offline, an AudioParam view in the worklet. */
+export interface MixSource { valueAt(t: number): number }
 
 /** Deterministic a-rate automation: set/linear-ramp/cancel, evaluated per sample. */
 export class Timeline {
@@ -14,6 +29,9 @@ export class Timeline {
   set(value: number, time: number): void { this.#insert(time, value, false); }
   ramp(value: number, time: number): void { this.#insert(time, value, true); }
   cancel(time: number): void { this.#events = this.#events.filter(event => event.t < time); }
+  /** Snapshot of the event list — the cross-runtime parameter channel (native Synchronizable). */
+  events(): TimelineEvent[] { return this.#events.map(event => ({ ...event })); }
+  load(events: TimelineEvent[]): void { this.#events = events.map(event => ({ ...event })); }
   valueAt(t: number): number {
     let v = 0; let tPrev = 0;
     for (const event of this.#events) {
@@ -71,22 +89,6 @@ export function convolve(signal: ArrayLike<number>, kernel: ArrayLike<number>): 
   return aR.subarray(0, outLength);
 }
 
-/** Streaming overlap-add convolver: feed 128-frame blocks, receive wet output blocks. */
-export class BlockConvolver {
-  readonly #kernel: Float64Array;
-  readonly #tail: Float64Array;
-  constructor(kernel: ArrayLike<number>) {
-    this.#kernel = Float64Array.from(kernel as ArrayLike<number>);
-    this.#tail = new Float64Array(this.#kernel.length - 1);
-  }
-  process(input: Float64Array, output: Float64Array): void {
-    const wet = convolve(input, this.#kernel);
-    for (let i = 0; i < input.length; i++) output[i] = wet[i]! + this.#tail[i]!;
-    // Shift the accumulator one block and add this block's overflow — contributions from several
-    // previous blocks overlap the same output region, so they must sum, not replace.
-    for (let i = 0; i < this.#tail.length; i++) this.#tail[i] = (this.#tail[i + input.length] ?? 0) + (wet[input.length + i] ?? 0);
-  }
-}
 
 export interface BiquadCoeffs { b0: number; b1: number; b2: number; a1: number; a2: number }
 
@@ -132,4 +134,169 @@ export function noiseBufferData(sampleRate: number): Float64Array {
   const random = mulberry32(0x4E4F4953);
   for (let i = 0; i < data.length; i++) data[i] = random() * 2 - 1;
   return data;
+}
+
+/**
+ * Feedforward echo, float64, identical math in the worklet and the offline renderer:
+ * wet = Σ_{k=1..taps} feedback^k · x[n − k·delayFrames]; dst = src + mix·wet.
+ * `inputs`/`outputs` are channel buffers; mono input feeds every output channel.
+ */
+export class DelayEffect {
+  readonly #rings: Float64Array[];
+  readonly #taps: number;
+  readonly #d: number;
+  readonly #feedback: number;
+  readonly #gains: number[];
+  #write = 0;
+  constructor(channels: number, delayFrames: number, taps: number, feedback: number) {
+    this.#d = delayFrames; this.#taps = taps; this.#feedback = feedback;
+    this.#gains = Array.from({ length: taps }, (_, k) => feedback ** (k + 1));
+    this.#rings = Array.from({ length: channels }, () => new Float64Array(delayFrames * taps + BLOCK));
+  }
+  process(inputs: Float64Array[], outputs: Float64Array[], mix: MixSource, t0: number, sampleRate: number, frames = BLOCK): void {
+    const size = this.#d * this.#taps + BLOCK;
+    for (let c = 0; c < outputs.length; c++) {
+      const src = inputs[Math.min(c, inputs.length - 1)]!;
+      const dst = outputs[c]!; const ring = this.#rings[Math.min(c, this.#rings.length - 1)]!;
+      let write = this.#write % size;
+      for (let i = 0; i < frames; i++) {
+        ring[write] = src[i]!;
+        let wet = 0;
+        for (let k = 1; k <= this.#taps; k++) wet += ring[(write - k * this.#d + size * 2) % size]! * this.#gains[k - 1]!;
+        dst[i] = src[i]! + wet * mix.valueAt(t0 + i / sampleRate);
+        write = (write + 1) % size;
+      }
+    }
+    this.#write = (this.#write + frames) % size;
+  }
+}
+
+/**
+ * Zero-added-latency two-level uniform partitioned FFT convolution, float64.
+ * HEAD: 128-sample partitions (FFT 256) over kernel[0, 2048) — up to 16 partitions, one
+ * frequency-domain delay line of input spectra, complex MAC per block, one IFFT + overlap-add.
+ * TAIL (kernel longer than 2048): 1024-sample partitions (FFT 2048) over kernel[2048, ∞). A
+ * completed 1024-frame input block B_k is first needed for the output block starting at
+ * 2048 + k·1024 — one full tail-block of slack — so its MACs are spread evenly over the next
+ * eight 128-frame sub-blocks and the IFFT runs at the boundary.
+ * process() writes the wet signal only.
+ */
+export class PartitionedConvolver {
+  static readonly #HEAD_PARTITIONS = 16;
+  static readonly #TAIL_PARTITION = 1024;
+  readonly #headH: { re: Float64Array; im: Float64Array }[] = [];
+  readonly #tailH: { re: Float64Array; im: Float64Array }[] = [];
+  readonly #headX: { re: Float64Array; im: Float64Array }[] = [];
+  readonly #tailX: { re: Float64Array; im: Float64Array }[] = [];
+  readonly #headAccRe = new Float64Array(256);
+  readonly #headAccIm = new Float64Array(256);
+  readonly #headOla = new Float64Array(BLOCK);
+  readonly #tailAccRe = new Float64Array(2048);
+  readonly #tailAccIm = new Float64Array(2048);
+  readonly #tailIn = new Float64Array(PartitionedConvolver.#TAIL_PARTITION);
+  readonly #tailOla = new Float64Array(PartitionedConvolver.#TAIL_PARTITION);
+  readonly #tailOut = new Float64Array(PartitionedConvolver.#TAIL_PARTITION);
+  #blockIndex = 0;
+  constructor(kernel: ArrayLike<number>) {
+    const heads = Math.min(PartitionedConvolver.#HEAD_PARTITIONS, Math.ceil(kernel.length / BLOCK));
+    for (let j = 0; j < heads; j++) {
+      const re = new Float64Array(256); const im = new Float64Array(256);
+      for (let i = 0; i < BLOCK; i++) re[i] = j * BLOCK + i < kernel.length ? kernel[j * BLOCK + i]! : 0;
+      fft(re, im); this.#headH.push({ re, im });
+    }
+    const tailLength = kernel.length - PartitionedConvolver.#HEAD_PARTITIONS * BLOCK;
+    const tails = Math.max(0, Math.ceil(tailLength / PartitionedConvolver.#TAIL_PARTITION));
+    for (let j = 0; j < tails; j++) {
+      const re = new Float64Array(2048); const im = new Float64Array(2048);
+      const offset = PartitionedConvolver.#HEAD_PARTITIONS * BLOCK + j * PartitionedConvolver.#TAIL_PARTITION;
+      for (let i = 0; i < PartitionedConvolver.#TAIL_PARTITION; i++) re[i] = offset + i < kernel.length ? kernel[offset + i]! : 0;
+      fft(re, im); this.#tailH.push({ re, im });
+    }
+  }
+  /** `input`/`output` are one 128-frame block each; output gains the wet signal. */
+  process(input: Float64Array, output: Float64Array): void {
+    const block = this.#blockIndex++;
+    // Head partitions: spectrum of the current block, then Σ_j X_{b−j}·H_j.
+    const re = this.#headAccRe; const im = this.#headAccIm;
+    re.fill(0); re.set(input); im.fill(0);
+    fft(re, im);
+    this.#headX.unshift({ re: re.slice(), im: im.slice() });
+    if (this.#headX.length > this.#headH.length) this.#headX.pop();
+    const outRe = re.fill(0); const outIm = im.fill(0);
+    for (let j = 0; j < this.#headX.length; j++) {
+      const x = this.#headX[j]!; const h = this.#headH[j]!;
+      for (let i = 0; i < 256; i++) {
+        outRe[i] = outRe[i]! + x.re[i]! * h.re[i]! - x.im[i]! * h.im[i]!;
+        outIm[i] = outIm[i]! + x.re[i]! * h.im[i]! + x.im[i]! * h.re[i]!;
+      }
+    }
+    fft(outRe, outIm, true);
+    for (let i = 0; i < BLOCK; i++) { output[i] = outRe[i]! + this.#headOla[i]!; this.#headOla[i] = outRe[BLOCK + i]!; }
+    if (!this.#tailH.length) return;
+    const sub = block % 8;
+    // tailOut holds the wet tail for the current 1024-frame output block (computed at the
+    // previous tail boundary); emit this sub-block's slice.
+    const off = sub * BLOCK;
+    for (let i = 0; i < BLOCK; i++) output[i] = output[i]! + this.#tailOut[off + i]!;
+    this.#tailIn.set(input, off);
+    // Spread the next output block's partition MACs over these eight sub-blocks: output block
+    // m = floor(block/8) + 1 needs X_{m−2−j}·H_j, and #tailX[j] is exactly X_{m−2−j} here
+    // (the newest entry X_{m−2} was pushed at the end of input block m−2).
+    const per = Math.ceil(this.#tailH.length / 8);
+    for (let j = sub * per; j < Math.min((sub + 1) * per, this.#tailH.length, this.#tailX.length); j++) {
+      const x = this.#tailX[j]!; const h = this.#tailH[j]!;
+      for (let i = 0; i < 2048; i++) {
+        this.#tailAccRe[i] = this.#tailAccRe[i]! + x.re[i]! * h.re[i]! - x.im[i]! * h.im[i]!;
+        this.#tailAccIm[i] = this.#tailAccIm[i]! + x.re[i]! * h.im[i]! + x.im[i]! * h.re[i]!;
+      }
+    }
+    if (sub === 7) {
+      // The 1024-frame input block completes: FFT it into the tail FDL after this output
+      // block's MACs consumed the list.
+      const xre = new Float64Array(2048); const xim = new Float64Array(2048);
+      xre.set(this.#tailIn); fft(xre, xim);
+      this.#tailX.unshift({ re: xre, im: xim });
+      if (this.#tailX.length > this.#tailH.length + 2) this.#tailX.pop();
+      // IFFT the accumulated spectrum → next output block, overlap-added with the pending
+      // second half of the previous tail transform.
+      fft(this.#tailAccRe, this.#tailAccIm, true);
+      for (let i = 0; i < PartitionedConvolver.#TAIL_PARTITION; i++) {
+        this.#tailOut[i] = this.#tailAccRe[i]! + this.#tailOla[i]!;
+        this.#tailOla[i] = this.#tailAccRe[PartitionedConvolver.#TAIL_PARTITION + i]!;
+      }
+      this.#tailAccRe.fill(0); this.#tailAccIm.fill(0);
+    }
+  }
+}
+
+/**
+ * Stereo convolver effect: one PartitionedConvolver per output channel (mono input feeds both
+ * ears, mono response feeds both channels). dst = src + mix·wet; outputs are always 2 channels.
+ * A partial final block (frames < BLOCK) is only valid as the last block — it is zero-padded.
+ */
+export class ConvolverEffect {
+  readonly #convolvers: PartitionedConvolver[];
+  readonly #wet: [Float64Array, Float64Array];
+  constructor(response: ArrayLike<number>[]) {
+    this.#convolvers = [new PartitionedConvolver(response[0]!), new PartitionedConvolver(response[Math.min(1, response.length - 1)]!)];
+    this.#wet = [new Float64Array(BLOCK), new Float64Array(BLOCK)];
+  }
+  process(inputs: Float64Array[], outputs: Float64Array[], mix: MixSource, t0: number, sampleRate: number, frames = BLOCK): void {
+    for (let c = 0; c < 2; c++) {
+      const src = inputs[Math.min(c, inputs.length - 1)]!;
+      const wet = this.#wet[c]!;
+      if (frames === BLOCK) this.#convolvers[c]!.process(src, wet);
+      else {
+        const padded = new Float64Array(BLOCK); padded.set(src.subarray(0, frames));
+        wet.fill(0); this.#convolvers[c]!.process(padded, wet);
+      }
+      const dst = outputs[c]!;
+      for (let i = 0; i < frames; i++) {
+        // FFT roundoff smears ±1e-16 across a block that contains signal — flush sub-1e-12 to exact
+        // zero so output before the first input stays bit-exact silence (and kill denormals).
+        const y = src[i]! + wet[i]! * mix.valueAt(t0 + i / sampleRate);
+        dst[i] = Math.abs(y) < 1e-12 ? 0 : y;
+      }
+    }
+  }
 }

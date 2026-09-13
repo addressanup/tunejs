@@ -59,10 +59,31 @@ export interface HostContext {
   suspend(): Promise<void>;
   close(): Promise<void>;
 }
+/**
+ * A TuneJS-owned processor running on the host's audio thread (browser AudioWorklet, native worklet
+ * node). One input, one output, dry path at unity plus `mix` × wet inside the node, so it never
+ * needs host fan-out. `close()` releases processor state; the node is disconnected separately.
+ */
+export interface HostDspNode extends HostNode { readonly mix: HostParam; close(): void }
+/**
+ * TuneJS DSP path. `load()` installs the processor code into a context once; `Engine.start()` awaits
+ * it before materializing DSP-backed nodes, so `create*` are synchronous and throw if `load()` has
+ * not resolved for that context. Both processors use the same kernel as the offline renderer
+ * (src/dsp.ts) so live and offline output agree sample-for-sample up to float rounding.
+ */
+export interface HostDsp {
+  load(context: HostContext): Promise<void>;
+  /** Feedforward echo: wet = Σ_{k=1..taps} feedback^k · x[n − k·delayFrames]; output is stereo, mono input feeds both channels. */
+  createDelay(context: HostContext, spec: { delayFrames: number; taps: number; feedback: number }): HostDspNode;
+  /** Convolution with `response` (1 or 2 channels at the context rate); mono input feeds both ears; output is stereo. */
+  createConvolver(context: HostContext, spec: { response: Float32Array[] }): HostDspNode;
+}
 export interface Adapter {
   readonly name: string;
   /** `fanOut: false` means the host delivers only one outgoing connection per node (measured live on React Native Audio API 0.13.3, see docs/evidence/2026-09-12/live-probes). */
   readonly hostLimits: { fanOut: boolean };
+  /** Present when the host can run TuneJS-owned processors; Delay/Reverb use it in preference to host nodes. */
+  dsp?: HostDsp;
   tapping?: { createTap(context: HostContext, options: { chunkFrames: number; inFlightChunks: number }): Promise<HostTap> };
   capture?(context: HostContext, options: { kind: 'microphone'; signal?: AbortSignal }): Promise<HostCapture>;
   createContext(): HostContext;

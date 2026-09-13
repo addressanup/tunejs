@@ -110,7 +110,10 @@ export function dspConvolverFixtureExpected(rate) {
 }
 async function renderDsp(context, kind, rate, hostTime, dsp) {
   if(!dsp) return { unavailable:'TuneJS DSP path absent' };
-  await dsp.load(context);
+  // A host whose offline context cannot run the DSP path says so with UNSUPPORTED (e.g. native offline
+  // contexts do not sum inputs); that is a documented host limit, not a fixture failure.
+  try { await dsp.load(context); }
+  catch(error) { if(error && error.code==='UNSUPPORTED') return { unavailable:`TuneJS DSP path unsupported on this context: ${error.message}` }; throw error; }
   const impulse=context.createBuffer(1,1,rate); impulse.getChannelData(0)[0]=1;
   const source=context.createBufferSource(); source.buffer=impulse;
   let node;

@@ -1,0 +1,48 @@
+{
+  "wave": "9 — TuneJS DSP path",
+  "date": "2026-09-13",
+  "question": "Can delay, reverb and PCM taps run inside one TuneJS-owned processor node on every host, with the same kernel as the offline renderer, so they no longer depend on host fan-out?",
+  "sources": {
+    "browser-results.json": "fixture v7 offline run, headless Chromium 152, OfflineAudioContext + AudioWorklet (9A)",
+    "browser-live-results.json": "dsp-live-probes v1, headless Chromium live AudioContext through the browser AudioWorklet tap",
+    "native-live-ios.json": "full example-app payload, iPhone 17 Pro simulator, iOS 26.5, Release; includes offline fixtures (raw + adapter-scheduled with dsp), live probes v2 and dsp-live-probes v1",
+    "native-live-android.json": "same payload, Android API 35 arm64 emulator (sdk_gphone64_arm64), Release",
+    "spike-ios.json / spike-android.json": "Phase-0 worklet spike: WorkletProcessingNode existence, callback shape, Synchronizable/scheduleOnRN primitives, tunejs-shipped 'worklet' functions and #private classes on the audio runtime",
+    "android-worklets-launch-crash.log": "one representative intermittent react-native-worklets launch crash (RuntimeManager::createWorkletRuntime → SerializableWorklet::toJSValue → jsi::Value::~Value SIGSEGV); relaunch succeeds"
+  },
+  "kernel": {
+    "module": "src/dsp.ts — DelayEffect (integer-frame feedforward taps, feedback^k), PartitionedConvolver (zero-added-latency two-level uniform partitioned FFT convolution: 128-frame head partitions over kernel[0,2048), 1024-frame tail partitions beyond, tail MACs spread across the eight sub-blocks of slack), ConvolverEffect (dry + mix·wet, stereo out, |y| < 1e-12 flushed to exact zero), Timeline (a-rate set/ramp/cancel) with events()/load() for cross-runtime transport",
+    "sharing": "identical code in Engine.render (offline), the bundled AudioWorklet processor (browser) and the 'worklet' kernel factory (native); PartitionedConvolver matches direct FFT convolution to ≤ 1e-9 for kernel lengths 1…48000 (tests/dsp.test.mjs)",
+    "hosts": {
+      "browser": "AudioWorkletNode 'tunejs-dsp', outputChannelCount [2]; mix is an a-rate AudioParam (port messages are NOT delivered while an OfflineAudioContext renders — measured, artifacts/dsp-path/probe.html)",
+      "native": "react-native-audio-api 0.13.3 createWorkletProcessingNode on 'AudioRuntime'; per-node state in the audio runtime's globalThis registry; mix via react-native-worklets Synchronizable {version, events}; a looping silent stereo AudioBufferSourceNode keeps each node enabled (a finished source disables its downstream nodes — AudioScheduledSourceNode.cpp:155-168, AudioNode.cpp:261-265) and forces channelCount = 2 (WorkletProcessingNode.cpp:31-33); taps post 1024-frame chunks with scheduleOnRN, startFrame = round(first callback currentTime × rate)"
+    }
+  },
+  "results": {
+    "offline fixture v7 (browser)": {
+      "dsp-delay": "pass, arithmeticError 0 at 44100 and 48000, repeatError 0, ~10-12 ms per 1 s render",
+      "dsp-convolver": "pass, arithmeticError ≤ 3.0e-17 at both rates, repeatError 0, ~55-65 ms per 1 s render (0.25 s response)"
+    },
+    "offline fixture v7 (native)": "dsp-delay/dsp-convolver report `unavailable` with reason 'TuneJS DSP path unsupported on this context: Native offline contexts do not sum inputs or keep processors alive' — the adapter refuses offline contexts by design; Engine.render is the offline path",
+    "dsp-live-probes v1 (48 kHz)": {
+      "dsp-delay-live": {"expected": "1, 0.5, 0.25, 0.125 spaced 480 frames, both channels", "browser": "pass, valueError 0, 5 groups", "ios": "pass, valueError 0, 6 groups", "android": "pass, valueError 0, 6 groups"},
+      "dsp-tail-live": {"expected": "all three echoes after a one-frame source has finished", "browser": "pass, 4 peaks, valueError 0", "ios": "pass, 4 peaks, valueError 0 (keep-alive holds)", "android": "pass, 4 peaks, valueError 0"},
+      "dsp-convolver-live": {"expected": "capture from the dry impulse equals dspConvolverFixtureExpected over 0.25 s, ≤ 1e-5", "browser": "pass, arithmeticError 0", "ios": "pass, arithmeticError 0", "android": "pass, arithmeticError 0"},
+      "dsp-mix-live": {"expected": "no echoes before mix 0→1, echoes after", "browser": "pass, request→first echo 544 frames", "ios": "pass, 288 frames", "android": "pass, 128 frames", "note": "latencyFrames includes the 8192-frame train alignment and is an upper bound, not a scheduling measurement"},
+      "tap clock": "0 dropped frames, 0 startFrame discontinuities on every host; firstStartFrame equals the creation-time engine frame on every probe (e.g. 44800/49152/49024 for the second probe)"
+    },
+    "pre-existing rows": "raw and adapter-scheduled fixtures and live probes v2 unchanged from the 2026-09-12 runs (the 14 native offline failures are the documented fan-out/summation/zero-delay host limits)"
+  },
+  "conclusions": [
+    "Delay and reverb are now supported on the native adapter through the TuneJS DSP path when the host app passes react-native-worklets' createSynchronizable and scheduleOnRN; capabilities.delay/reverb/taps/recorder/meters read true there. hostLimits.fanOut stays false: user-level fan-out still rejects.",
+    "Native PCM taps have a producer-side engine-frame origin (the worklet callback's currentTime) and the same bounded in-flight/drop accounting as the browser tap. Chunks are always stereo on this host.",
+    "Microphone capture on native is still UNSUPPORTED: the RecorderAdapterNode input pool can drop frames without reporting them (docs/backend-decision.md capture findings); a tap after that node would timestamp correctly but could not account for upstream drops.",
+    "Live and offline outputs now share one kernel, but sample equality between live host output and Engine.render is still not claimed: sources, gains, filters and pans remain host nodes live.",
+    "The intermittent react-native-worklets launch crash is a host issue that predates this wave; it occurred on 1 of 2 Android launches in the final run and never after a relaunch. It is recorded, not fixed."
+  ],
+  "not_established": [
+    "physical-device behaviour (simulator/emulator only)",
+    "audible output, latency or CPU headroom under the reference workload with DSP nodes on native",
+    "binaural rendering (Wave 10 builds on this path)"
+  ]
+}

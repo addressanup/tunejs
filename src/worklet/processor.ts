@@ -1,4 +1,5 @@
-import { BLOCK, ConvolverEffect, DelayEffect, Timeline } from '../dsp.js';
+import { BLOCK, ConvolverEffect, DelayEffect } from '../dsp.js';
+import type { MixSource } from '../dsp.js';
 
 declare class AudioWorkletProcessor {
   constructor(options?: { processorOptions?: unknown });
@@ -21,7 +22,7 @@ class TuneJsDspProcessor extends AudioWorkletProcessor {
   readonly #effect: DelayEffect | ConvolverEffect;
   readonly #ins = [new Float64Array(BLOCK), new Float64Array(BLOCK)];
   readonly #outs = [new Float64Array(BLOCK), new Float64Array(BLOCK)];
-  readonly #mix = { valueAt: (t: number): number => this.#mixAt(t) };
+  readonly #mix: MixSource = { valueAt: (t: number): number => this.#mixAt(t) };
   #mixParam: ArrayLike<number> = [1];
   #t0 = 0;
   #closed = false;
@@ -51,7 +52,7 @@ class TuneJsDspProcessor extends AudioWorkletProcessor {
       if (src) for (let i = 0; i < BLOCK; i++) work[i] = src[i]!;
       else work.fill(0);
     }
-    this.#effect.process(this.#ins, this.#outs, this.#mix as Timeline, currentTime, sampleRate);
+    this.#effect.process(this.#ins, this.#outs, this.#mix, currentTime, sampleRate);
     for (let c = 0; c < 2; c++) {
       const dst = outputs[0]![c]!;
       const work = this.#outs[c]!;

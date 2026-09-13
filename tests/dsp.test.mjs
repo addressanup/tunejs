@@ -170,3 +170,13 @@ test('worklet processor returns false after close',()=>{
   const outs=[[new Float32Array(BLOCK),new Float32Array(BLOCK)]];
   assert.equal(sim.proc.process(ins,outs,{mix:[1]}),false);
 });
+
+test('Timeline events/load round-trip preserves automation', () => {
+  const a = new Timeline();
+  a.set(0.25, 0.001); a.ramp(1, 0.01); a.cancel(0.008); a.set(0.5, 0.02);
+  const b = new Timeline();
+  b.load(a.events());
+  for (const t of [0, 0.0005, 0.001, 0.004, 0.0079, 0.008, 0.019, 0.02, 0.03]) {
+    assert.equal(b.valueAt(t), a.valueAt(t), `mismatch at ${t}`);
+  }
+});

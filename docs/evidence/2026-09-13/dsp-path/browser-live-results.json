@@ -1,0 +1,199 @@
+{
+  "dspLiveProbeVersion": 1,
+  "sampleRate": 48000,
+  "adapter": "web-audio",
+  "stateBeforeClose": "running",
+  "results": [
+    {
+      "probe": "dsp-delay-live",
+      "expectedGapFrames": 480,
+      "expectedValues": [
+        1,
+        0.5,
+        0.25,
+        0.125
+      ],
+      "peakCount": 22,
+      "firstPeaks": [
+        {
+          "frame": 2400,
+          "value": 1
+        },
+        {
+          "frame": 2880,
+          "value": 0.5
+        },
+        {
+          "frame": 3360,
+          "value": 0.25
+        },
+        {
+          "frame": 3840,
+          "value": 0.125
+        },
+        {
+          "frame": 10592,
+          "value": 1
+        },
+        {
+          "frame": 11072,
+          "value": 0.5
+        },
+        {
+          "frame": 11552,
+          "value": 0.25
+        },
+        {
+          "frame": 12032,
+          "value": 0.125
+        }
+      ],
+      "groups": [
+        {
+          "frame": 2400,
+          "values": [
+            1,
+            0.5,
+            0.25,
+            0.125
+          ],
+          "valueError": 0
+        },
+        {
+          "frame": 10592,
+          "values": [
+            1,
+            0.5,
+            0.25,
+            0.125
+          ],
+          "valueError": 0
+        },
+        {
+          "frame": 18784,
+          "values": [
+            1,
+            0.5,
+            0.25,
+            0.125
+          ],
+          "valueError": 0
+        },
+        {
+          "frame": 26976,
+          "values": [
+            1,
+            0.5,
+            0.25,
+            0.125
+          ],
+          "valueError": 0
+        }
+      ],
+      "groupCount": 5,
+      "valueError": 0,
+      "channelMismatch": 0,
+      "tap": {
+        "firstStartFrame": 0,
+        "createdAtFrame": 0,
+        "chunkCount": 43,
+        "totalFrames": 44032,
+        "droppedFrames": 0,
+        "discontinuities": 0
+      },
+      "status": "pass"
+    },
+    {
+      "probe": "dsp-tail-live",
+      "expectedGapFrames": 480,
+      "peakCount": 4,
+      "peaks": [
+        {
+          "frame": 2400,
+          "value": 1
+        },
+        {
+          "frame": 2880,
+          "value": 0.5
+        },
+        {
+          "frame": 3360,
+          "value": 0.25
+        },
+        {
+          "frame": 3840,
+          "value": 0.125
+        }
+      ],
+      "gaps": [
+        480,
+        480,
+        480
+      ],
+      "valueError": 0,
+      "channelMismatch": 0,
+      "tap": {
+        "firstStartFrame": 44800,
+        "createdAtFrame": 44800,
+        "chunkCount": 47,
+        "totalFrames": 48128,
+        "droppedFrames": 0,
+        "discontinuities": 0
+      },
+      "status": "pass"
+    },
+    {
+      "probe": "dsp-convolver-live",
+      "onsetFrame": 2400,
+      "responseFrames": 12000,
+      "arithmeticError": 0,
+      "perChannel": [
+        {
+          "arithmeticError": 0,
+          "fit": {
+            "lagFrames": 0,
+            "scale": 1,
+            "residual": 0
+          }
+        },
+        {
+          "arithmeticError": 0,
+          "fit": {
+            "lagFrames": 0,
+            "scale": 1,
+            "residual": 0
+          }
+        }
+      ],
+      "tap": {
+        "firstStartFrame": 92928,
+        "createdAtFrame": 92928,
+        "chunkCount": 46,
+        "totalFrames": 47104,
+        "droppedFrames": 0,
+        "discontinuities": 0
+      },
+      "status": "pass"
+    },
+    {
+      "probe": "dsp-mix-live",
+      "changeFrame": 160768,
+      "dryBeforeChange": 3,
+      "echoesBeforeChange": 0,
+      "echoesAfterChange": 11,
+      "firstEchoFrame": 161312,
+      "latencyFrames": 544,
+      "tap": {
+        "firstStartFrame": 141568,
+        "createdAtFrame": 141568,
+        "chunkCount": 47,
+        "totalFrames": 48128,
+        "droppedFrames": 0,
+        "discontinuities": 0
+      },
+      "status": "pass",
+      "scope": "latencyFrames is request→first observed echo on this host; it includes the train period alignment (≤ 8192 frames) and is an upper bound, not a scheduling measurement"
+    }
+  ],
+  "scope": "live context through the adapter PCM tap with muted output; host-graph behavior of the TuneJS DSP path only, not device output, latency or listening evidence"
+}

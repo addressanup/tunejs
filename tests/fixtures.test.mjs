@@ -132,6 +132,14 @@ test('fixture reports retain strict timing failures alongside onset diagnostics'
     for(const result of results) { assert.equal(result.status,'unavailable'); assert.equal(result.reason,'TuneJS DSP path absent'); }
   }
   await assert.rejects(fixtures.runFixtures(createOffline,{dsp:{load(){}}}),TypeError);
+  const unsupported=Object.assign(new Error('offline contexts do not sum inputs on this host'),{code:'UNSUPPORTED'});
+  const limited=await fixtures.runFixtures(createOffline,{dsp:{async load(){throw unsupported;},createDelay(){throw new Error('unreachable');},createConvolver(){throw new Error('unreachable');}}});
+  for(const result of limited.results.filter(result=>fixtures.dspKinds.includes(result.kind))) {
+    assert.equal(result.status,'unavailable');
+    assert.match(result.reason,/^TuneJS DSP path unsupported on this context: offline contexts do not sum/);
+  }
+  const failing=await fixtures.runFixtures(createOffline,{dsp:{async load(){throw new Error('boom');},createDelay(){},createConvolver(){}}});
+  for(const result of failing.results.filter(result=>fixtures.dspKinds.includes(result.kind))) assert.equal(result.status,'error');
   const expected=fixtures.dspConvolverFixtureExpected(48000);
   assert.equal(expected.length,2);
   assert.equal(expected[0][0],Math.fround(fixtures.syntheticImpulseResponse(12000,1234)[0]+1));

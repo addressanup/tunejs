@@ -14,6 +14,9 @@ export function delayFramesFor(timeSeconds: number, sampleRate: number): number 
 
 interface TimelineEvent { t: number; v: number; ramp: boolean }
 
+/** Anything a-rate automation can be read from — Timeline offline, an AudioParam view in the worklet. */
+export interface MixSource { valueAt(t: number): number }
+
 /** Deterministic a-rate automation: set/linear-ramp/cancel, evaluated per sample. */
 export class Timeline {
   #events: TimelineEvent[] = [];
@@ -26,6 +29,9 @@ export class Timeline {
   set(value: number, time: number): void { this.#insert(time, value, false); }
   ramp(value: number, time: number): void { this.#insert(time, value, true); }
   cancel(time: number): void { this.#events = this.#events.filter(event => event.t < time); }
+  /** Snapshot of the event list — the cross-runtime parameter channel (native Synchronizable). */
+  events(): TimelineEvent[] { return this.#events.map(event => ({ ...event })); }
+  load(events: TimelineEvent[]): void { this.#events = events.map(event => ({ ...event })); }
   valueAt(t: number): number {
     let v = 0; let tPrev = 0;
     for (const event of this.#events) {
@@ -147,7 +153,7 @@ export class DelayEffect {
     this.#gains = Array.from({ length: taps }, (_, k) => feedback ** (k + 1));
     this.#rings = Array.from({ length: channels }, () => new Float64Array(delayFrames * taps + BLOCK));
   }
-  process(inputs: Float64Array[], outputs: Float64Array[], mix: Timeline, t0: number, sampleRate: number, frames = BLOCK): void {
+  process(inputs: Float64Array[], outputs: Float64Array[], mix: MixSource, t0: number, sampleRate: number, frames = BLOCK): void {
     const size = this.#d * this.#taps + BLOCK;
     for (let c = 0; c < outputs.length; c++) {
       const src = inputs[Math.min(c, inputs.length - 1)]!;
@@ -275,7 +281,7 @@ export class ConvolverEffect {
     this.#convolvers = [new PartitionedConvolver(response[0]!), new PartitionedConvolver(response[Math.min(1, response.length - 1)]!)];
     this.#wet = [new Float64Array(BLOCK), new Float64Array(BLOCK)];
   }
-  process(inputs: Float64Array[], outputs: Float64Array[], mix: Timeline, t0: number, sampleRate: number, frames = BLOCK): void {
+  process(inputs: Float64Array[], outputs: Float64Array[], mix: MixSource, t0: number, sampleRate: number, frames = BLOCK): void {
     for (let c = 0; c < 2; c++) {
       const src = inputs[Math.min(c, inputs.length - 1)]!;
       const wet = this.#wet[c]!;
@@ -285,7 +291,12 @@ export class ConvolverEffect {
         wet.fill(0); this.#convolvers[c]!.process(padded, wet);
       }
       const dst = outputs[c]!;
-      for (let i = 0; i < frames; i++) dst[i] = src[i]! + wet[i]! * mix.valueAt(t0 + i / sampleRate);
+      for (let i = 0; i < frames; i++) {
+        // FFT roundoff smears ±1e-16 across a block that contains signal — flush sub-1e-12 to exact
+        // zero so output before the first input stays bit-exact silence (and kill denormals).
+        const y = src[i]! + wet[i]! * mix.valueAt(t0 + i / sampleRate);
+        dst[i] = Math.abs(y) < 1e-12 ? 0 : y;
+      }
     }
   }
 }

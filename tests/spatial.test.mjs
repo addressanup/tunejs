@@ -133,7 +133,7 @@ test('binaural spatial source validates, binds three params, and disposes',async
   const {encodeHrtfAsset}=await import('../dist/hrtf.js');
   const {syntheticHrtfTable}=await import('../experiments/fixtures.js');
   const table=syntheticHrtfTable(48000);
-  const bytes=encodeHrtfAsset({format:'tunejs-hrtf',version:1,id:'test',azimuthConvention:'c',elevations:table.elevations,azimuthStepDegrees:table.azimuthStepDegrees,poles:'single',taps:table.taps,sampleFormat:'int16',rates:[48000],positions:table.rows.reduce((n,r)=>n+r.length/(2*table.taps),0),layout:'test',peak:1,source:{},conversion:'x'},new Map([[48000,table]]));
+  const bytes=encodeHrtfAsset({format:'tunejs-hrtf',version:1,id:'test',azimuthConvention:'clockwise-from-front-degrees',elevations:table.elevations,azimuthStepDegrees:table.azimuthStepDegrees,poles:'single',taps:table.taps,sampleFormat:'int16',rates:[48000],positions:table.rows.reduce((n,r)=>n+r.length/(2*table.taps),0),layout:'test',peak:1,source:{},conversion:'x'},new Map([[48000,table]]));
   // dsp-capable host double
   const h=host();
   const created=[];

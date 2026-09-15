@@ -84,6 +84,9 @@ export function decodeHrtfAsset(input: ArrayBuffer | ArrayBufferView): HrtfAsset
   }
   if (header.format !== 'tunejs-hrtf' || header.version !== 1) throw failed(`unsupported format '${String(header.format)}' version ${String(header.version)}`);
   if (!header.id) throw failed('header id is empty');
+  if (header.azimuthConvention !== 'clockwise-from-front-degrees') throw failed(`unsupported azimuthConvention '${String(header.azimuthConvention)}'`);
+  if (typeof header.peak !== 'number' || !Number.isFinite(header.peak) || header.peak <= 0 || header.peak > 1) throw failed('peak must be a finite value in (0, 1]');
+  if (!header.source || typeof header.source !== 'object') throw failed('source attribution metadata is required');
   if (!Array.isArray(header.elevations) || !header.elevations.length || !header.elevations.every(v => typeof v === 'number' && Math.abs(v) <= 90)) throw failed('elevations must be numbers within ±90°');
   for (let i = 1; i < header.elevations.length; i++) if (header.elevations[i]! <= header.elevations[i - 1]!) throw failed('elevations must be strictly increasing');
   if (!isInt(header.azimuthStepDegrees) || header.azimuthStepDegrees <= 0 || 360 % header.azimuthStepDegrees !== 0) throw failed('azimuthStepDegrees must divide 360');

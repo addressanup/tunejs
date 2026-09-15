@@ -1,0 +1,33 @@
+{
+ "wave": "10 — binaural rendering (HRTF asset + tunejs-binaural-v1)",
+ "date": "2026-09-13",
+ "question": "Can one TuneJS-owned binaural renderer — nearest-position HRIR convolution with linear crossfade — run identically in the offline renderer, a browser AudioWorklet, and a React Native worklet node, under the sustained reference workload?",
+ "sources": {
+  "artifacts/binaural/browser-results.json": "fixture v8 offline run, headless Chromium 152: all rows pass including the six dsp-binaural-* kinds at 44100 and 48000 against the direct-convolution reference (synthetic HRTF table)",
+  "artifacts/binaural/browser-live-results.json": "dsp-live-probes v2, headless Chromium live AudioContext: all five probes pass; dsp-binaural-live recovers the right-ear near tap q16(0.9) at +4 frames and left-ear far tap q16(0.1) at +28 frames per period",
+  "artifacts/binaural/native-live-ios.json": "full example-app payload, iPhone 17 Pro simulator, iOS 26.5, Release: dsp-live-probes v2 all pass, dsp-binaural-live valueError 0; raw host-node fixture rows still fail as documented (host fan-out/offline-summation limits, unchanged)",
+  "artifacts/binaural/native-live-android.json": "same payload, Android API 35 arm64 emulator: dsp-live-probes v2 all pass, dsp-binaural-live valueError 0; raw host-node rows fail identically",
+  "artifacts/binaural/workload-binaural-600.json": "reference workload, binaural mode, 600 s headless Chromium 152: status pass — 1201 scheduled / 0 late / 0 skipped transport events, 34505 pose updates at 60 Hz, 10139 meter reads with 0 dropped frames, peakVoices 12, clockDrift 0.020 s over 600 s",
+  "artifacts/binaural/workload-stereo-60.json": "60 s stereo control run: pass, 0 late events, 0 dropped meter frames — no stereo regression",
+  "artifacts/binaural/ios-worklets-launch-crash.ips": "one react-native-worklets launch crash (createWorkletRuntime SIGSEGV) during the iOS run — the known intermittent host crash; relaunch succeeded"
+ },
+ "asset": {
+  "file": "assets/hrtf/sadie2-d1-ku100-v1.tjhrtf (1627307 bytes) + integrity JSON + NOTICE",
+  "grid": "794 positions — elevations -90..90 step 15, azimuths 0..355 step 5, single position per pole; selected from the dense 9201-file SADIE II D1 grid with zero angular error (every target name exists exactly)",
+  "tables": "256 taps, int16, rates 44100 and 48000; verified byte-exact against the source WAVs within int16 quantization (max 1.5e-5)",
+  "identity": "SADIE II v2-2, subject D1, Neumann KU100, Apache-2.0; azimuth converted (360 - sadieAz) mod 360 to clockwise-from-front"
+ },
+ "kernel": {
+  "module": "src/dsp.ts — ConvolverInput (shared input-side FDL) + PartitionedConvolver slots with setKernel; BinauralEffect: mono = mean(inputs) * a-rate gain, nearest-HRTF pair per block, linear crossfade w=(i+1)/N over smoothingFrames, both ears fed identical x",
+  "agreement": "BinauralEffect matches binauralReference to <= 1e-9 on all six programs at both rates (unit); bundled tunejs-binaural worklet processor matches <= 1e-5 (Float32 boundary); native worklet simulation likewise",
+  "fix during integration": "refactor introduced a tail-partition MAC typo (x.re vs x.im) breaking kernels > 2048 taps; caught by the convolve() parity test, corrected before merge"
+ },
+ "conclusions": [
+  "spatialSource({rendering:'binaural', hrtf}) is supported on the browser adapter and on the native adapter's TuneJS DSP path; it requires adapter.dsp and an explicit hrtf asset and never falls back to stereo",
+  "binaural output is deterministic and shared across live and offline paths: the same kernel class serves Engine.render, the AudioWorklet, and the RN worklet",
+  "the binaural workload sustains the reference load within all existing thresholds; no new counters were added, so audible-dropout freedom is still not concluded (same caveat as stereo)",
+  "native raw-host fixtures (strict timing, fan-out, offline summation) remain failing by design — the TuneJS DSP path is what carries binaural natively",
+  "the intermittent react-native-worklets launch crash re-occurred once on iOS; it remains a host reliability issue for the device gates, not a correctness blocker"
+ ],
+ "stillOpen": ["physical-device binaural validation (iPhone, Android)", "headphone listening review", "Firefox/Safari and Android Chrome binaural fixtures", "HRTF assets for additional subjects/rates"]
+}

@@ -1,0 +1,22 @@
+<!doctype html><html><meta charset="utf-8"><title>TuneJS DSP-path fixtures (CI)</title>
+<!--
+  CI fixture page — a verbatim copy of artifacts/binaural/run/dsp.html (Wave 10 run dir).
+  Serve the repository (or a run dir with dist/, experiments/, assets/ linked in) with
+  `node scripts/serve.mjs`, then open /dsp.html (or /ci/fixtures/dsp.html when served from
+  the repo root) in a browser. The page runs the full fixture-v8 suite — including the
+  TuneJS DSP-path kinds dsp-delay, dsp-convolver and the six dsp-binaural-* programs —
+  through OfflineAudioContext and POSTs the report to /results/browser, which serve.mjs
+  writes to artifacts/browser-results.json under its working directory. Assert it with
+  `node ci/assert-fixtures.mjs <file>`. See ci/fixtures/README.md for the full recipe.
+-->
+<script type="module">
+import {runFixtures} from '/experiments/fixtures.js';
+import {browserAdapter} from '/dist/adapters/browser.js';
+const pre=document.createElement('pre');document.body.append(pre);
+try {
+  const report={date:new Date().toISOString(),userAgent:navigator.userAgent,...await runFixtures(o=>new OfflineAudioContext(o),{dsp:browserAdapter().dsp})};
+  pre.textContent=JSON.stringify(report,null,2);
+  await fetch('/results/browser',{method:'POST',body:JSON.stringify(report,null,2)});
+  console.log('DONE');
+} catch (error) { pre.textContent='FAIL '+error; console.log('FAIL '+error); }
+</script></html>

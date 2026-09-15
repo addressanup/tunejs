@@ -1,0 +1,26 @@
+{
+ "wave": "11 — host matrix (no-hardware lane)",
+ "date": "2026-09-15",
+ "question": "Do the fixture-v8 offline suite and dsp-live-probes v2 — including every dsp-binaural-* row — pass on Gecko (Firefox), WebKit (Safari) and Blink-on-Android (Chrome emulator), not just desktop Chromium?",
+ "sources": {
+  "artifacts/host-matrix/firefox-fixtures.json": "Firefox 156.0 headless, macOS arm64: 38/38 rows pass, all errors exactly 0 — the only host where the raw delayonly@48000 row passes",
+  "artifacts/host-matrix/firefox-live.json": "dsp-live-probes v2 headless with autoplay prefs disabled: 5/5 pass incl. dsp-binaural-live",
+  "artifacts/host-matrix/safari-fixtures.json": "Safari 26.6.2 (WebKit 605.1.15) macOS: 37/38 — all dsp-* kinds pass at both rates; delayonly@48000 fails at arithmeticError 1.0728836059570312e-05",
+  "artifacts/host-matrix/android-chrome-fixtures.json": "Chrome 124.0.6367.219 on Android API 35 emulator (sdk_gphone64_arm64): 37/38 — identical delayonly@48000 failure, arithmeticError 1.0728836059570312e-05",
+  "artifacts/host-matrix/android-chrome-live.json": "dsp-live-probes v2: 5/5 pass incl. dsp-binaural-live; required --autoplay-policy=no-user-gesture-required in /data/local/tmp/chrome-command-line",
+  "artifacts/host-matrix/NOTES.md": "per-host versions, launch flags, autoplay notes"
+ },
+ "findings": [
+  "Every dsp-* fixture kind — dsp-binaural-{front,right,mirror,elevation,move,gain}, dsp-delay, dsp-convolver at 44100 and 48000 — passes on all three engines. The TuneJS DSP path is engine-independent for these workloads.",
+  "The only failure is the raw-host DelayNode reference row delayonly@48000 on Safari and Chrome-Android, with the byte-identical arithmeticError 1.0728836059570312e-05 (onset one frame early, 479 vs 480) — a shared non-Gecko rounding behavior in the host DelayNode, not a TuneJS defect. TuneJS delay() runs through the owned DSP path on browsers, so the engine is unaffected; the row remains as the host-limitation reference, same role as the native raw rows.",
+  "Firefox is the first host to pass all 38 rows including delayonly@48000.",
+  "Safari live probes are unmeasured, not failed: AudioContext.resume() pends without a user gesture and this session lacks automation permission; the live.html tab is left open at http://127.0.0.1:4174/live.html — one manual click completes the run (server: artifacts/host-matrix/serve4174.mjs on port 4174).",
+  "Android Chrome needed two command-line flags before the pages would run (first-run activity + autoplay); both are emulator-environment issues, recorded in NOTES.md."
+ ],
+ "hostMatrixDelta": {
+  "firefox-macos": "fixtures + live probes verified (headless)",
+  "safari-macos": "offline fixtures verified; live probes blocked on autoplay — needs one click",
+  "android-chrome-emulator": "fixtures + live probes verified",
+  "stillOpen": ["physical Android + iPhone (lifecycle, workload, mic, audible output)", "Safari live probes (one click)", "Android Chrome on physical device", "wired latency measurement"]
+ }
+}

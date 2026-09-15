@@ -1,0 +1,102 @@
+# TuneJS CI — controller tests, package verification, generated-file checks and the
+# browser fixture pages (ci/fixtures/). The browser-fixtures job uses the runner's
+# preinstalled Chrome; no new dependencies are added to the package.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npm test
+      - run: npm run check:package
+
+  native-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm run check:native
+
+  browser-fixtures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci && npm run build
+
+      - name: Locate a Chrome/Chromium binary
+        id: chrome
+        run: |
+          # ubuntu-latest ships Google Chrome (google-chrome / google-chrome-stable).
+          # Fall back to Chromium package names; if nothing is found the fixture step is
+          # skipped and the job still runs `npm test` below as the minimum gate.
+          for b in google-chrome google-chrome-stable chromium chromium-browser; do
+            if command -v "$b" >/dev/null 2>&1; then
+              echo "bin=$b" >> "$GITHUB_OUTPUT"
+              "$b" --version
+              break
+            fi
+          done
+
+      - name: Run fixture pages in headless Chrome
+        if: steps.chrome.outputs.bin != ''
+        run: |
+          set -e
+          # Prepared run dir, mirroring artifacts/host-matrix/NOTES.md: the pages plus
+          # symlinks to dist/, experiments/ and assets/, so POSTed results land in
+          # ci/run/artifacts/ and cannot collide with the repo's artifacts/.
+          mkdir -p ci/run
+          cp ci/fixtures/dsp.html ci/fixtures/live.html ci/run/
+          ln -sfn ../../dist ci/run/dist
+          ln -sfn ../../experiments ci/run/experiments
+          ln -sfn ../../assets ci/run/assets
+          cd ci/run
+          node ../../scripts/serve.mjs &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+          for i in $(seq 1 50); do
+            curl -sf http://127.0.0.1:4173/dsp.html >/dev/null && break
+            sleep 0.2
+          done
+          run_page() {
+            page="$1"; out="$2"
+            rm -f artifacts/browser-results.json
+            "${{ steps.chrome.outputs.bin }}" --headless=new --mute-audio \
+              --autoplay-policy=no-user-gesture-required --no-first-run --disable-fre \
+              --disable-gpu --disable-dev-shm-usage \
+              "http://127.0.0.1:4173/$page" >"/tmp/chrome-$page.log" 2>&1 &
+            CHROME_PID=$!
+            for i in $(seq 1 240); do
+              [ -f artifacts/browser-results.json ] && break
+              kill -0 "$CHROME_PID" 2>/dev/null || break
+              sleep 0.5
+            done
+            kill "$CHROME_PID" 2>/dev/null || true
+            test -f artifacts/browser-results.json
+            cp artifacts/browser-results.json "$out"
+          }
+          run_page dsp.html dsp-results.json
+          run_page live.html live-results.json
+          node ../../ci/assert-fixtures.mjs dsp-results.json live-results.json
+
+      # TODO(no-browser fallback): if the runner image ever ships without Chrome, install
+      # one explicitly or port the two pages to a bundled driver, then re-enable the step
+      # above. Until then the minimum gate is the unit suite:
+      - name: Minimum gate (no Chrome found)
+        if: steps.chrome.outputs.bin == ''
+        run: npm test

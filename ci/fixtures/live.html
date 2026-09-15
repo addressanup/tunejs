@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8"><title>TuneJS DSP live probes (CI)</title>
+<!--
+  CI fixture page — a verbatim copy of artifacts/binaural/run/live.html (Wave 10 run dir).
+  Runs dsp-live-probes v2 (dsp-delay-live, dsp-tail-live, dsp-convolver-live, dsp-mix-live,
+  dsp-binaural-live) on a LIVE AudioContext through the browser adapter's TuneJS DSP path,
+  observed through the adapter's own PCM tap with the audible path muted. The context must
+  be allowed to run without a user gesture — launch Chrome with
+  --autoplay-policy=no-user-gesture-required (see ci/fixtures/README.md).
+  Results POST to /results/browser -> artifacts/browser-results.json under the server's
+  working directory; assert with `node ci/assert-fixtures.mjs <file>`.
+-->
+<script type="importmap">{"imports":{"tunejs":"/dist/index.js","tunejs/browser":"/dist/adapters/browser.js","./fixtures.js":"/experiments/fixtures.js"}}</script>
+<script type="module">
+import {runDspLiveProbes} from '/experiments/dsp-live-probes.js';
+import {browserAdapter} from 'tunejs/browser';
+try {
+  const report = await runDspLiveProbes(() => new AudioContext(), browserAdapter(), { settleSeconds: 1 });
+  await fetch('/results/browser', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(report,null,2)});
+  console.log('DONE', JSON.stringify(report.results?.map(r=>[r.probe,r.status])));
+} catch(error) { console.error('FATAL', error); }
+</script>
